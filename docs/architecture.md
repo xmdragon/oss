@@ -33,16 +33,18 @@
 
 ### MinIO
 
-- **单 Go 二进制** + Docker 镜像，没有数据库、没有 PHP-FPM、没有任何外部依赖
-- **S3 协议**：Rust 用 `aws-sdk-s3` 或 `rust-s3`，Python 用 `boto3`，语言无关
+- **单 Go 二进制**，没有数据库、没有 PHP-FPM、没有任何外部依赖
+- 装法：官方 Linux 二进制 → `/usr/local/bin/minio`，systemd 托管。**不走 Docker**（VPS 内存只有 1GB，省 docker daemon 的 ~200MB）
+- **S3 协议**：Rust 用 `aws-sdk-s3`，Python 用 `boto3`，语言无关
 - **lifecycle policy**：原生支持"对象 N 天后自动删除"，免写清理脚本
-- **bucket policy**：原生支持"桶内对象匿名可读"，无需 Nginx 改配置
+- **bucket policy**：原生支持"桶内对象匿名可读"，无需改反代
 - 健康时内存占用 ~100 MB，磁盘按需
 
 ### Caddy
 
-- 自动申请 / 续签 Let's Encrypt 证书，`Caddyfile` 里两行搞定 HTTPS
-- 反向代理到 MinIO，把域名用户层和对象存储层隔离，以后换 MinIO 版本不影响证书
+- 官方 apt 包自带 systemd 服务和 `caddy` 用户
+- 自动申请 / 续签 Let's Encrypt 证书，`Caddyfile` 里几行搞定 HTTPS
+- 反向代理到 MinIO（`127.0.0.1:9000`，仅本机可达），把对外端口和对象存储隔离
 
 ## 4. 数据流
 
@@ -94,8 +96,8 @@
 - Ozon 走匿名 HTTP GET，不需要凭证
 
 **AK 泄漏应急**：
-1. SSH 上 VPS，`mc admin user disable stage ozon-desktop`
-2. 新建 `ozon-desktop-v2` + 同策略
+1. SSH 上 VPS，`bash /opt/oss/ops/rotate-ak.sh`
+2. 该脚本建新 AK 并 disable 旧 AK
 3. 桌面端新版本替换 AK，发版
 
 整个过程不需要改阿里云控制台 / 不会有超额账单 / 不影响已上架商品（商品图已在 Ozon CDN）。

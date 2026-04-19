@@ -1,38 +1,46 @@
 # Ozon 图片暂存 —— Caddy 反代配置
-# 由 docker-compose 的 PUBLIC_HOST / ACME_EMAIL 变量控制
+# 部署时由 install.sh 复制到 /etc/caddy/Caddyfile
+# {$PUBLIC_HOST} / {$ACME_EMAIL} 来自 systemd drop-in 的 /opt/oss/.env
 
 {
     email {$ACME_EMAIL}
-    # 生产证书，去掉下一行可切到生产（默认就是生产）
-    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+    # 全局请求体上限 20MB（单张图 ≤10MB，留 header/余量）
+    # 防止异常大文件灌爆磁盘
+    servers {
+        max_header_size 1MB
+    }
 }
 
 {$PUBLIC_HOST} {
     encode zstd gzip
 
-    # MinIO S3 API 反代
-    reverse_proxy minio:9000 {
-        # S3 API 请求较大（上传）/较小（签名头），放宽超时
+    # 限制请求体 20MB
+    request_body {
+        max_size 20MB
+    }
+
+    # MinIO S3 API 反代（MinIO 绑在 127.0.0.1:9000，只本机可达）
+    reverse_proxy 127.0.0.1:9000 {
         transport http {
             read_timeout 5m
             write_timeout 5m
         }
+        # S3 签名校验需要原始 Host
         header_up Host {host}
+        header_up X-Real-IP {remote_host}
     }
 
-    # Ozon 拉图时的安全头（防盗链不能加，Ozon 就是外部）
     header {
-        # 允许跨域 GET，方便桌面端调试/浏览器查看
         Access-Control-Allow-Origin "*"
         Access-Control-Allow-Methods "GET, HEAD, PUT"
         Access-Control-Allow-Headers "Authorization, Content-Type, Content-MD5, x-amz-*"
-        # HSTS 12 个月
         Strict-Transport-Security "max-age=31536000"
+        # 对象返回时不暴露 MinIO 版本头
+        -Server
     }
 
-    # 日志（每周轮转 + 保留 4 份）
     log {
-        output file /data/access.log {
+        output file /var/log/caddy/access.log {
             roll_size 100mb
             roll_keep 4
             roll_keep_for 720h

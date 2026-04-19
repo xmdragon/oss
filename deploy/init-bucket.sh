@@ -1,130 +1,90 @@
 #!/usr/bin/env bash
-# ozon-image-stage 首次初始化脚本
-# 在 VPS 上的 /opt/ozon-image-stage/ 目录执行
-# 前置：docker compose up -d 已经跑起来，.env 已配好
-
+# 首次初始化 bucket + 策略 + 生命周期
+# 前置：minio 与 caddy 已 systemctl 起来，/opt/oss/.env 已配好
+# 幂等：可反复执行
 set -euo pipefail
 
-# 加载 .env
-if [ ! -f .env ]; then
-    echo "ERROR: .env 不存在，先 cp .env.example .env 并改好值"
-    exit 1
-fi
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+ENV_FILE="/opt/oss/.env"
+[ -f "$ENV_FILE" ] || { echo "ERROR: $ENV_FILE 不存在"; exit 1; }
 
-: "${MINIO_ROOT_USER:?must be set in .env}"
-: "${MINIO_ROOT_PASSWORD:?must be set in .env}"
-: "${DESKTOP_ACCESS_KEY:?must be set in .env}"
-: "${DESKTOP_SECRET_KEY:?must be set in .env}"
-: "${BUCKET_NAME:?must be set in .env}"
-: "${LIFECYCLE_EXPIRE_DAYS:?must be set in .env}"
+# shellcheck disable=SC1090
+set -a; source "$ENV_FILE"; set +a
+
+: "${MINIO_ROOT_USER:?}"; : "${MINIO_ROOT_PASSWORD:?}"
+: "${DESKTOP_ACCESS_KEY:?}"; : "${DESKTOP_SECRET_KEY:?}"
+: "${BUCKET_NAME:?}"; : "${LIFECYCLE_EXPIRE_DAYS:?}"
 
 ALIAS="local"
 
-# mc 用 docker 运行，加入 internal 网络直接连 minio:9000
-MC() {
-    docker run --rm \
-        --network ozon-image-stage_internal \
-        -v "$(pwd)/mc-config:/root/.mc" \
-        minio/mc:latest "$@"
-}
-
 echo "==> 配置 mc alias"
-MC alias set "$ALIAS" http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
+mc alias set "$ALIAS" "http://127.0.0.1:9000" "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null
 
 echo "==> 等待 MinIO 就绪"
 for i in {1..30}; do
-    if MC admin info "$ALIAS" >/dev/null 2>&1; then
-        break
-    fi
-    echo "   still waiting... ($i/30)"
-    sleep 2
+    if mc admin info "$ALIAS" >/dev/null 2>&1; then break; fi
+    [ "$i" = "30" ] && { echo "ERROR: MinIO 超时未就绪"; exit 1; }
+    sleep 1
 done
 
 echo "==> 创建 bucket: $BUCKET_NAME"
-if MC ls "$ALIAS/$BUCKET_NAME" >/dev/null 2>&1; then
-    echo "   bucket 已存在，跳过"
+if mc ls "$ALIAS/$BUCKET_NAME" >/dev/null 2>&1; then
+    echo "   已存在，跳过"
 else
-    MC mb "$ALIAS/$BUCKET_NAME"
+    mc mb "$ALIAS/$BUCKET_NAME"
     echo "   ✓ Bucket '$BUCKET_NAME' created"
 fi
 
 echo "==> 设置 bucket 匿名只读（Ozon 拉图用）"
-MC anonymous set download "$ALIAS/$BUCKET_NAME"
-echo "   ✓ Anonymous read policy applied"
+mc anonymous set download "$ALIAS/$BUCKET_NAME" >/dev/null
+echo "   ✓ Anonymous GET allowed"
 
-echo "==> 创建桌面端专用 user + put-only policy"
-POLICY_FILE="$(pwd)/mc-config/put-only-policy.json"
-mkdir -p "$(dirname "$POLICY_FILE")"
+echo "==> 创建桌面端 put-only policy"
+POLICY_FILE="$(mktemp)"
+trap 'rm -f "$POLICY_FILE"' EXIT
 cat > "$POLICY_FILE" <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::$BUCKET_NAME/*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:ListBucket"
-      ],
-      "Resource": [
-        "arn:aws:s3:::$BUCKET_NAME"
-      ],
-      "Condition": {
-        "StringLike": {
-          "s3:prefix": [""]
-        }
-      }
+      "Action": ["s3:PutObject"],
+      "Resource": ["arn:aws:s3:::$BUCKET_NAME/*"]
     }
   ]
 }
 EOF
+mc admin policy create "$ALIAS" put-only "$POLICY_FILE" 2>&1 | grep -v "already exists" || true
+echo "   ✓ policy 'put-only' ensured"
 
-# 先删再建，便于反复运行这个脚本（幂等）
-MC admin policy create "$ALIAS" put-only /root/.mc/put-only-policy.json \
-    || echo "   policy put-only 已存在，继续"
-
-if MC admin user info "$ALIAS" "$DESKTOP_ACCESS_KEY" >/dev/null 2>&1; then
-    echo "   user $DESKTOP_ACCESS_KEY 已存在，更新 secret"
-    MC admin user enable "$ALIAS" "$DESKTOP_ACCESS_KEY"
+echo "==> 创建/更新桌面端用户 $DESKTOP_ACCESS_KEY"
+if mc admin user info "$ALIAS" "$DESKTOP_ACCESS_KEY" >/dev/null 2>&1; then
+    # 用户已存在；如果 .env 里改了 SK，需要先删再建
+    echo "   用户已存在，若 SK 变更请先手动 mc admin user remove 再重跑"
+    mc admin user enable "$ALIAS" "$DESKTOP_ACCESS_KEY" >/dev/null
 else
-    MC admin user add "$ALIAS" "$DESKTOP_ACCESS_KEY" "$DESKTOP_SECRET_KEY"
+    mc admin user add "$ALIAS" "$DESKTOP_ACCESS_KEY" "$DESKTOP_SECRET_KEY"
 fi
-
-MC admin policy attach "$ALIAS" put-only --user "$DESKTOP_ACCESS_KEY" \
-    || echo "   policy 已绑定"
-echo "   ✓ User '$DESKTOP_ACCESS_KEY' created with put-only policy"
+mc admin policy attach "$ALIAS" put-only --user "$DESKTOP_ACCESS_KEY" 2>&1 | grep -v "already attached" || true
+echo "   ✓ user + policy 绑定"
 
 echo "==> 配置 lifecycle: ${LIFECYCLE_EXPIRE_DAYS} 天后自动删除"
-MC ilm rule remove --id auto-expire "$ALIAS/$BUCKET_NAME" 2>/dev/null || true
-MC ilm rule add \
-    --expire-days "$LIFECYCLE_EXPIRE_DAYS" \
-    --id auto-expire \
-    "$ALIAS/$BUCKET_NAME"
-echo "   ✓ Lifecycle rule: expire after $LIFECYCLE_EXPIRE_DAYS days"
+# 新版 mc 的 rule add 不接受 --id（自动生成）；幂等做法是先清空所有再添
+mc ilm rule remove --all --force "$ALIAS/$BUCKET_NAME" >/dev/null 2>&1 || true
+mc ilm rule add --expire-days "$LIFECYCLE_EXPIRE_DAYS" "$ALIAS/$BUCKET_NAME" >/dev/null
+echo "   ✓ lifecycle: ${LIFECYCLE_EXPIRE_DAYS}d"
 
-echo ""
-echo "================================================================"
-echo "  初始化完成"
-echo "================================================================"
-echo "  公网 endpoint :  https://${PUBLIC_HOST}"
-echo "  Bucket        :  $BUCKET_NAME"
-echo "  桌面端 AK     :  $DESKTOP_ACCESS_KEY"
-echo "  桌面端 SK     :  （见 .env 的 DESKTOP_SECRET_KEY，不要发到群里）"
-echo ""
-echo "  自测："
-echo "    curl -T <local.jpg> \\"
-echo "      -u ${DESKTOP_ACCESS_KEY}:<sk> \\"
-echo "      https://${PUBLIC_HOST}/${BUCKET_NAME}/test.jpg"
-echo "    curl -I https://${PUBLIC_HOST}/${BUCKET_NAME}/test.jpg"
-echo "================================================================"
+cat <<SUMMARY
+
+================================================================
+  初始化完成
+================================================================
+  公网 endpoint :  https://${PUBLIC_HOST}
+  Bucket        :  $BUCKET_NAME
+  桌面端 AK     :  $DESKTOP_ACCESS_KEY
+  桌面端 SK     :  （见 .env，不要发到群里）
+  生命周期      :  ${LIFECYCLE_EXPIRE_DAYS} 天
+
+  自测（在 VPS 上）:
+    bash /opt/oss/ops/smoke-test.sh
+================================================================
+SUMMARY

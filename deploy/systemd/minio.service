@@ -1,0 +1,40 @@
+[Unit]
+Description=MinIO S3 Compatible Object Storage
+Documentation=https://min.io/docs/minio/linux/index.html
+Wants=network-online.target
+After=network-online.target
+AssertFileIsExecutable=/usr/local/bin/minio
+AssertFileNotEmpty=/opt/oss/.env
+
+[Service]
+Type=notify
+WorkingDirectory=/opt/oss
+User=minio-user
+Group=minio-user
+ProtectProc=invisible
+
+EnvironmentFile=/opt/oss/.env
+
+# 把 .env 里的 MINIO_OPTS 展开。注意 systemd 不做 shell 解析，
+# 但 ExecStart 对 $VAR 做简单替换，空格分隔多 token 可用。
+ExecStartPre=/bin/bash -c 'if [ -z "$${MINIO_VOLUMES}" ]; then echo "MINIO_VOLUMES not set"; exit 1; fi'
+ExecStart=/usr/local/bin/minio server $MINIO_OPTS $MINIO_VOLUMES
+
+Restart=always
+RestartSec=5
+
+# 限制资源
+LimitNOFILE=65536
+TasksMax=infinity
+TimeoutStopSec=30
+SendSIGKILL=no
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/oss/data
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
