@@ -1,0 +1,42 @@
+# Ozon 图片暂存 —— Caddy 反代配置
+# 由 docker-compose 的 PUBLIC_HOST / ACME_EMAIL 变量控制
+
+{
+    email {$ACME_EMAIL}
+    # 生产证书，去掉下一行可切到生产（默认就是生产）
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$PUBLIC_HOST} {
+    encode zstd gzip
+
+    # MinIO S3 API 反代
+    reverse_proxy minio:9000 {
+        # S3 API 请求较大（上传）/较小（签名头），放宽超时
+        transport http {
+            read_timeout 5m
+            write_timeout 5m
+        }
+        header_up Host {host}
+    }
+
+    # Ozon 拉图时的安全头（防盗链不能加，Ozon 就是外部）
+    header {
+        # 允许跨域 GET，方便桌面端调试/浏览器查看
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, HEAD, PUT"
+        Access-Control-Allow-Headers "Authorization, Content-Type, Content-MD5, x-amz-*"
+        # HSTS 12 个月
+        Strict-Transport-Security "max-age=31536000"
+    }
+
+    # 日志（每周轮转 + 保留 4 份）
+    log {
+        output file /data/access.log {
+            roll_size 100mb
+            roll_keep 4
+            roll_keep_for 720h
+        }
+        format json
+    }
+}

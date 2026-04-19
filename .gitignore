@@ -1,0 +1,19 @@
+# Secrets
+deploy/.env
+*.env
+
+# Runtime data（部署到 VPS 后才产生）
+deploy/data/
+deploy/caddy_data/
+deploy/caddy_config/
+deploy/mc-config/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
