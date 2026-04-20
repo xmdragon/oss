@@ -30,8 +30,8 @@ ufw --force default allow outgoing >/dev/null
 ufw allow 22/tcp >/dev/null
 ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
-# 9443 = MinIO Console（Caddy 反代），limit 限制同源 30s 6 次以内，防爆破
-ufw limit 9443/tcp >/dev/null
+# 历史版本曾放行 9443（Console 走非标端口），切到子域名后关掉
+ufw delete limit 9443/tcp >/dev/null 2>&1 || true
 ufw --force enable >/dev/null
 ufw status | head -8
 
@@ -91,11 +91,19 @@ if [ ! -f "$OSS_DIR/.env" ]; then
     echo "   ✓ 新生成 .env（secret 已随机化，记得备份 $OSS_DIR/.env）"
 else
     log "$OSS_DIR/.env 已存在，跳过生成"
-    # 迁移：旧版本 .env 没有 MINIO_BROWSER_REDIRECT_URL，补一个
-    if ! grep -q '^MINIO_BROWSER_REDIRECT_URL=' "$OSS_DIR/.env"; then
+    # 迁移：补 ADMIN_HOST（Console 子域名）
+    if ! grep -q '^ADMIN_HOST=' "$OSS_DIR/.env"; then
+        log "  ↳ 补写 ADMIN_HOST（默认 ossmanage.hjdtrading.com，按需修改）"
+        echo 'ADMIN_HOST=ossmanage.hjdtrading.com' >> "$OSS_DIR/.env"
+    fi
+    # 迁移：老版本的 MINIO_BROWSER_REDIRECT_URL 用 :9443，切子域名后改写
+    ADM_HOST="$(grep '^ADMIN_HOST=' "$OSS_DIR/.env" | cut -d= -f2-)"
+    if grep -q '^MINIO_BROWSER_REDIRECT_URL=.*:9443' "$OSS_DIR/.env"; then
+        log "  ↳ 更新 MINIO_BROWSER_REDIRECT_URL 指向 ${ADM_HOST}"
+        sed -i "s|^MINIO_BROWSER_REDIRECT_URL=.*|MINIO_BROWSER_REDIRECT_URL=https://${ADM_HOST}|" "$OSS_DIR/.env"
+    elif ! grep -q '^MINIO_BROWSER_REDIRECT_URL=' "$OSS_DIR/.env"; then
         log "  ↳ 补写 MINIO_BROWSER_REDIRECT_URL（Console 公网 URL）"
-        PUB_HOST="$(grep '^PUBLIC_HOST=' "$OSS_DIR/.env" | cut -d= -f2-)"
-        echo "MINIO_BROWSER_REDIRECT_URL=https://${PUB_HOST}:9443" >> "$OSS_DIR/.env"
+        echo "MINIO_BROWSER_REDIRECT_URL=https://${ADM_HOST}" >> "$OSS_DIR/.env"
     fi
 fi
 

@@ -42,7 +42,7 @@ vnstat -m                # 每月
 
 ### 1.4 Web 管理端（MinIO Console）
 
-浏览器打开 **https://oss.hjdtrading.com:9443/** ，用 `/opt/oss/.env` 里的 `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` 登录。
+浏览器打开 **https://ossmanage.hjdtrading.com/** ，用 `/opt/oss/.env` 里的 `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` 登录。
 
 可用操作：浏览 bucket、上传/下载/删除对象、查看 lifecycle、管理 AK/SK、监控 IO。
 
@@ -51,7 +51,7 @@ vnstat -m                # 每月
 ssh oss 'grep ^MINIO_ROOT /opt/oss/.env'
 ```
 
-防护：UFW 对 9443 启用 `limit`（30 秒 6 次内），密码 48 位随机，仅 HTTPS。**勿把该密码发 IM**。
+防护：独立子域名、标准 443 端口、LE 证书、密码 48 位随机。**勿把该密码发 IM**。
 
 ---
 
