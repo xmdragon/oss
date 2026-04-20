@@ -30,6 +30,8 @@ ufw --force default allow outgoing >/dev/null
 ufw allow 22/tcp >/dev/null
 ufw allow 80/tcp >/dev/null
 ufw allow 443/tcp >/dev/null
+# 9443 = MinIO Console（Caddy 反代），limit 限制同源 30s 6 次以内，防爆破
+ufw limit 9443/tcp >/dev/null
 ufw --force enable >/dev/null
 ufw status | head -8
 
@@ -89,6 +91,12 @@ if [ ! -f "$OSS_DIR/.env" ]; then
     echo "   ✓ 新生成 .env（secret 已随机化，记得备份 $OSS_DIR/.env）"
 else
     log "$OSS_DIR/.env 已存在，跳过生成"
+    # 迁移：旧版本 .env 没有 MINIO_BROWSER_REDIRECT_URL，补一个
+    if ! grep -q '^MINIO_BROWSER_REDIRECT_URL=' "$OSS_DIR/.env"; then
+        log "  ↳ 补写 MINIO_BROWSER_REDIRECT_URL（Console 公网 URL）"
+        PUB_HOST="$(grep '^PUBLIC_HOST=' "$OSS_DIR/.env" | cut -d= -f2-)"
+        echo "MINIO_BROWSER_REDIRECT_URL=https://${PUB_HOST}:9443" >> "$OSS_DIR/.env"
+    fi
 fi
 
 # ─── 7. systemd 单元 ─────────────────────────────────────
@@ -101,8 +109,8 @@ cp "$SCRIPT_DIR/systemd/caddy.override.conf" /etc/systemd/system/caddy.service.d
 log "安装 Caddyfile"
 mkdir -p /etc/caddy /var/log/caddy
 cp "$SCRIPT_DIR/Caddyfile" /etc/caddy/Caddyfile
-# 预创 access.log，避免 caddy validate (以 root 跑) 把文件建成 root:root 导致后续 caddy 进程无写权限
-touch /var/log/caddy/access.log
+# 预创日志文件，避免 caddy validate (以 root 跑) 把文件建成 root:root 导致后续 caddy 进程无写权限
+touch /var/log/caddy/access.log /var/log/caddy/admin-access.log
 chown -R caddy:caddy /var/log/caddy
 # 语法校验（用 .env 里的变量展开）
 set -a; . "$OSS_DIR/.env"; set +a

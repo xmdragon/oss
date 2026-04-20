@@ -48,3 +48,32 @@
         format json
     }
 }
+
+# ─── MinIO Console 管理端 ──────────────────────────────────
+# 同域名 + 端口 9443，https 访问：https://oss.hjdtrading.com:9443
+# 登录用 .env 里的 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
+# LE 签发沿用 :80 HTTP-01 挑战，同一张证书即可
+{$PUBLIC_HOST}:9443 {
+    reverse_proxy 127.0.0.1:9001 {
+        transport http {
+            read_timeout 5m
+            write_timeout 5m
+        }
+        # Console 依赖 Host 头做跳转/WebSocket；X-Forwarded-* Caddy 默认会带
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/admin-access.log {
+            roll_size 50mb
+            roll_keep 4
+        }
+        format json
+    }
+}
