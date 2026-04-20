@@ -62,6 +62,12 @@
         # Console 依赖 Host 头做跳转/WebSocket；X-Forwarded-* Caddy 默认会带
         header_up Host {host}
         header_up X-Real-IP {remote_host}
+        # MinIO Console 的 WebSocket Origin 校验不接受带端口的 Origin（已知 quirk）。
+        # 浏览器连 :9443 必然带 Origin: https://oss.hjdtrading.com:9443 → 403。
+        # 把 Origin 改写成无端口版本，WS 才能 101 Switching Protocols。
+        # Cookie 是 HttpOnly + SameSite=Lax，攻击者跨站请求不会带 auth cookie，
+        # 所以即便改写了 Origin 仍不构成 CSRF 可利用性。
+        header_up Origin "https://{$PUBLIC_HOST}"
     }
 
     header {
