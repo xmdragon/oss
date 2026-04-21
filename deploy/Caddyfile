@@ -8,10 +8,21 @@
     # 防止异常大文件灌爆磁盘
     servers {
         max_header_size 1MB
+        # Cloudflare 回源：信任 CF 边缘 IP，从 CF-Connecting-IP 取真实客户端 IP
+        # IP 段来源：https://www.cloudflare.com/ips-v4/  /ips-v6/
+        # CF 的段列表几年一更，若日志里 client_ip 开始回退成 CF IP 说明段变了
+        trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+        client_ip_headers CF-Connecting-IP X-Forwarded-For
     }
 }
 
 {$PUBLIC_HOST} {
+    # Cloudflare Origin Certificate（15 年有效，只被 CF 信任）
+    # 切证书前必须确保 oss.hjdtrading.com 的 DNS 已切到 CF 橙色云，
+    # 且 CF 的 SSL/TLS 模式 = Full (strict)，否则所有直连客户端会因证书链
+    # 不被信任而失败。续期：到期前在 CF → SSL/TLS → Origin Server 重新生成。
+    tls /etc/caddy/origin/oss.crt /etc/caddy/origin/oss.key
+
     encode zstd gzip
 
     # 限制请求体 20MB
@@ -27,7 +38,9 @@
         }
         # S3 签名校验需要原始 Host
         header_up Host {host}
-        header_up X-Real-IP {remote_host}
+        # 走 CF 后，{client_ip} 来自 CF-Connecting-IP；未走 CF 时等同 remote_host
+        header_up X-Real-IP {client_ip}
+        header_up X-Forwarded-For {client_ip}
     }
 
     header {
@@ -57,6 +70,10 @@
 #   2) MinIO Console WS 的 Origin 校验对非标准端口有 bug
 # 走标准 443 两个问题都没了
 {$ADMIN_HOST} {
+    # 显式走 Let's Encrypt，否则 Caddy 会误用 *.hjdtrading.com 的 CF Origin Cert
+    # （CF Origin CA 浏览器不认，而 ossmanage 是灰色云直连，必须公共 CA 证书）
+    tls {$ACME_EMAIL}
+
     reverse_proxy 127.0.0.1:9001 {
         transport http {
             read_timeout 5m
