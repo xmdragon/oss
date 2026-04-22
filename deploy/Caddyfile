@@ -4,7 +4,7 @@
 
 {
     email {$ACME_EMAIL}
-    # 全局请求体上限 20MB（单张图 ≤10MB，留 header/余量）
+    # 全局请求体上限 100MB（覆盖图片 + 短视频上传）
     # 防止异常大文件灌爆磁盘
     servers {
         max_header_size 1MB
@@ -25,9 +25,9 @@
 
     encode zstd gzip
 
-    # 限制请求体 20MB
+    # 限制请求体 100MB
     request_body {
-        max_size 20MB
+        max_size 100MB
     }
 
     # MinIO S3 API 反代（MinIO 绑在 127.0.0.1:9000，只本机可达）

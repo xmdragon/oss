@@ -83,14 +83,14 @@ Content-Length: 1234567
 - **200**：上传成功。响应 body 空；`ETag` header 是内容 MD5
 - **403 AccessDenied**：AK 禁用 / SK 错 / policy 变更 —— **不要重试**，报给用户"请升级客户端版本"
 - **400**：请求格式错（SDK bug 可能）
-- **413** `EntityTooLarge`：超过 Caddy 20MB 限制（本场景图片 ≤10MB 不会遇到）
+- **413** `EntityTooLarge`：超过 Caddy 100MB 限制（图片 ≤10MB、短视频 ≤100MB）
 - **5xx**：MinIO 或网络故障，按 §6 重试
 
 ### 4.4 约束
 
 | 项 | 值 |
 |---|---|
-| 单对象最大 | 20 MB（Caddy 层），推荐客户端先压缩到 ≤10 MB |
+| 单对象最大 | 100 MB（Caddy 层）。图片建议客户端压缩到 ≤10 MB；视频 ≤100 MB |
 | 单次并发 PUT | 建议 ≤5，VPS 上行带宽是瓶颈 |
 | `Content-Type` | **必填**，Ozon 会按这个头决定解码；正确填 `image/jpeg`、`image/png`、`image/webp` |
 | 对象 key 字符集 | `[A-Za-z0-9._-]`；避免中文、空格、`/` |
