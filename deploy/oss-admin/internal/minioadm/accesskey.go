@@ -46,12 +46,18 @@ func (c *Client) ListAccessKeys(ctx context.Context) ([]AccessKey, error) {
 	return out, nil
 }
 
-// CreateDesktopAK creates a new MinIO user with the put-only policy attached.
-// SecretKey is generated server-side (32 hex chars) if not provided. The
-// returned NewAccessKey.SecretKey is the only time the plaintext is exposed.
-func (c *Client) CreateDesktopAK(ctx context.Context, accessKey, secretKey string) (NewAccessKey, error) {
+// CreateAK creates a new MinIO user and attaches the named policy. SecretKey
+// is generated server-side (48 hex chars) if not provided. The returned
+// NewAccessKey.SecretKey is the only time the plaintext is exposed.
+//
+// Partial-failure cleanup: if AttachPolicy fails after AddUser, the user is
+// removed so we never leave an AK with no policy attached.
+func (c *Client) CreateAK(ctx context.Context, accessKey, secretKey, policy string) (NewAccessKey, error) {
 	if accessKey == "" {
 		return NewAccessKey{}, fmt.Errorf("access key required")
+	}
+	if policy == "" {
+		return NewAccessKey{}, fmt.Errorf("policy required")
 	}
 	if secretKey == "" {
 		secretKey = randomHex(24) // matches openssl rand -hex 24 in install.sh
@@ -60,14 +66,35 @@ func (c *Client) CreateDesktopAK(ctx context.Context, accessKey, secretKey strin
 		return NewAccessKey{}, fmt.Errorf("AddUser: %w", err)
 	}
 	if _, err := c.Admin.AttachPolicy(ctx, madmin.PolicyAssociationReq{
-		Policies: []string{PolicyDesktopAK},
+		Policies: []string{policy},
 		User:     accessKey,
 	}); err != nil {
-		// Best effort cleanup so we don't leave a passwordless user.
+		// Best effort cleanup so we don't leave a user with no policy.
 		_ = c.Admin.RemoveUser(ctx, accessKey)
 		return NewAccessKey{}, fmt.Errorf("AttachPolicy: %w", err)
 	}
 	return NewAccessKey{AccessKey: accessKey, SecretKey: secretKey}, nil
+}
+
+// CreateDesktopAK is a convenience wrapper that always attaches PolicyDesktopAK.
+// Kept so the rotate flow stays callable with one fewer argument.
+func (c *Client) CreateDesktopAK(ctx context.Context, accessKey, secretKey string) (NewAccessKey, error) {
+	return c.CreateAK(ctx, accessKey, secretKey, PolicyDesktopAK)
+}
+
+// ListPolicies returns the canned policy names known to MinIO. Used by the AK
+// create form to populate the policy dropdown.
+func (c *Client) ListPolicies(ctx context.Context) ([]string, error) {
+	policies, err := c.Admin.ListCannedPolicies(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ListCannedPolicies: %w", err)
+	}
+	out := make([]string, 0, len(policies))
+	for name := range policies {
+		out = append(out, name)
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 // SetEnabled flips a user's enable/disable flag.
@@ -88,7 +115,7 @@ func (c *Client) DeleteAK(ctx context.Context, accessKey string) error {
 // delete the old one — handler/operator must confirm clients have rolled over
 // before purging. Mirrors the rotate-ak.sh policy.
 func (c *Client) RotateDesktopAK(ctx context.Context, oldAK, newAK string) (NewAccessKey, error) {
-	created, err := c.CreateDesktopAK(ctx, newAK, "")
+	created, err := c.CreateAK(ctx, newAK, "", PolicyDesktopAK)
 	if err != nil {
 		return NewAccessKey{}, err
 	}

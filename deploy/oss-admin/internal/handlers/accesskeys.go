@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+
+	"github.com/xmdragon/oss/deploy/oss-admin/internal/minioadm"
 )
 
 func (s *Server) GetAccessKeys(w http.ResponseWriter, r *http.Request) {
@@ -14,6 +16,13 @@ func (s *Server) GetAccessKeys(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "list access keys: "+err.Error(), http.StatusBadGateway)
 		return
+	}
+	policies, perr := s.MC.ListPolicies(ctx)
+	if perr != nil {
+		// Non-fatal: if policy listing fails, the create form falls back to
+		// just the desktop default. Surface as a flash for visibility.
+		setFlash(w, "err", "policy 列表加载失败: "+perr.Error())
+		policies = []string{minioadm.PolicyDesktopAK}
 	}
 
 	// New AK passed via query param after creation/rotation. We use a one-shot
@@ -35,8 +44,10 @@ func (s *Server) GetAccessKeys(w http.ResponseWriter, r *http.Request) {
 		Flash:     msg,
 		FlashKind: kind,
 		Data: map[string]any{
-			"Keys":  keys,
-			"NewAK": newAK,
+			"Keys":            keys,
+			"NewAK":           newAK,
+			"Policies":        policies,
+			"DefaultPolicy":   minioadm.PolicyDesktopAK,
 		},
 	})
 }
@@ -46,21 +57,25 @@ func (s *Server) PostAccessKeyCreate(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	ak := r.FormValue("access_key")
 	sk := r.FormValue("secret_key")
+	policy := r.FormValue("policy")
+	if policy == "" {
+		policy = minioadm.PolicyDesktopAK
+	}
 	if ak == "" {
 		setFlash(w, "err", "AccessKey 不能为空")
 		http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
 		return
 	}
-	created, err := s.MC.CreateDesktopAK(ctx, ak, sk)
+	created, err := s.MC.CreateAK(ctx, ak, sk, policy)
 	if err != nil {
 		s.Audit.FromRequest(r, "accesskey.create", ak, "error", err.Error())
 		setFlash(w, "err", "创建失败: "+err.Error())
 		http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
 		return
 	}
-	s.Audit.FromRequest(r, "accesskey.create", ak, "ok", "")
+	s.Audit.FromRequest(r, "accesskey.create", ak, "ok", "policy="+policy)
 	stashNewAK(w, created.AccessKey, created.SecretKey)
-	setFlash(w, "ok", "新 Access Key 已创建——SecretKey 仅显示一次，立刻保存。")
+	setFlash(w, "ok", "新 Access Key 已创建（policy="+policy+"）——SecretKey 仅显示一次，立刻保存。")
 	http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
 }
 

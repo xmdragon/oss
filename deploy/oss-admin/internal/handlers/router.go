@@ -24,6 +24,7 @@ func (s *Server) Router() http.Handler {
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", s.GetDashboard)
 	protected.HandleFunc("GET /buckets", s.GetBuckets)
+	protected.HandleFunc("POST /buckets", s.PostBucketCreate)
 	protected.HandleFunc("GET /buckets/{name}", s.GetBucketDetail)
 	protected.HandleFunc("POST /buckets/{name}/lifecycle", s.PostLifecycleAdd)
 	protected.HandleFunc("POST /buckets/{name}/lifecycle/delete", s.PostLifecycleDelete)

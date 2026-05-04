@@ -40,12 +40,15 @@ func TestParseTemplates(t *testing.T) {
 			"SampleCount":  0,
 			"Endpoint":     "127.0.0.1:9000",
 		}}},
-		{"buckets", baseView{Title: "Buckets", Username: "grom", Data: map[string]any{"Buckets": []any{}}}},
+		{"buckets", baseView{Title: "Buckets", Username: "grom", Data: map[string]any{
+			"Buckets": []any{}, "SuggestedDays": 7,
+		}}},
 		{"bucket_detail", baseView{Title: "Bucket: x", Username: "grom", Data: map[string]any{
 			"Bucket": "x", "Rules": []any{}, "PolicyJSON": "", "SuggestedDays": 7,
 		}}},
 		{"accesskeys", baseView{Title: "AKs", Username: "grom", Data: map[string]any{
 			"Keys": []any{}, "NewAK": map[string]string(nil),
+			"Policies": []string{"put-only", "readonly"}, "DefaultPolicy": "put-only",
 		}}},
 	}
 	for _, c := range cases {

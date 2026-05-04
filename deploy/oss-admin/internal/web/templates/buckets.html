@@ -15,4 +15,16 @@
   {{end}}
   </tbody>
 </table>
+
+<section>
+  <h2>新建 Bucket</h2>
+  <p class="muted">勾选"应用 Ozon 默认配置"会自动加：匿名只读 policy（让 Ozon 拉图）+ N 天 lifecycle。等价于在新 bucket 上跑一次 init-bucket.sh 的 bucket 段。</p>
+  <form method="post" action="/buckets" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>Bucket 名<input name="name" required pattern="[a-z0-9][a-z0-9.\-]{1,61}[a-z0-9]" placeholder="3-63 字符，小写字母/数字/.-" autocomplete="off"></label>
+    <label>Lifecycle 天数<input name="lifecycle_days" type="number" min="1" value="{{.Data.SuggestedDays}}"></label>
+    <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="apply_defaults" checked> 应用 Ozon 默认配置</label>
+    <button type="submit">创建</button>
+  </form>
+</section>
 {{template "footer" .}}{{end}}

@@ -54,12 +54,20 @@
 </section>
 
 <section>
-  <h2>新建桌面端 Access Key</h2>
-  <p class="muted">自动绑定 <code>put-only</code> 策略——只能 PUT，不能 GET/DELETE。</p>
+  <h2>新建 Access Key</h2>
+  <p class="muted">桌面端用 <code>put-only</code>（只能 PUT，不能 GET/DELETE）；其他 policy 视用途而定。所有 policy 都是 MinIO 现存的 canned policy。</p>
   <form method="post" action="/access-keys" class="form-grid">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <label>AccessKey<input name="access_key" required placeholder="例：ozon-desktop-2"></label>
     <label>SecretKey（留空自动生成）<input name="secret_key" placeholder="留空自动生成 48-hex"></label>
+    <label>Policy
+      <select name="policy">
+        {{$default := .Data.DefaultPolicy}}
+        {{range .Data.Policies}}
+          <option value="{{.}}"{{if eq . $default}} selected{{end}}>{{.}}</option>
+        {{end}}
+      </select>
+    </label>
     <button type="submit">创建</button>
   </form>
 </section>
