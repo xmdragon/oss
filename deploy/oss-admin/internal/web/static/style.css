@@ -95,6 +95,24 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .callout-once { border-color: var(--warn); background: rgba(245,158,11,0.08); }
 .callout h3 { margin-top: 0; color: var(--warn); }
 
+/* Lifecycle / policy display */
+.rule-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 10px; }
+.rule-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.rule-card-head .rule-id { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--muted); font-size: 12px; }
+.rule-card-actions { margin-left: auto; }
+.rule-card-body p { margin: 4px 0; font-size: 14px; }
+.rule-headline { color: var(--fg); }
+.rule-headline strong { color: var(--accent); font-size: 16px; padding: 0 2px; }
+.rule-scope { color: var(--muted); }
+
+.policy-clauses { list-style: none; padding: 0; margin: 0 0 12px 0; }
+.policy-clauses li { background: var(--panel); padding: 8px 12px; border-radius: 4px; margin-bottom: 6px; border-left: 3px solid var(--ok); font-size: 14px; }
+.policy-clauses li:has-text { color: var(--fg); }
+
+details.raw-json { margin-top: 12px; }
+details.raw-json summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+details.raw-json[open] summary { margin-bottom: 8px; }
+
 /* AK form */
 fieldset { border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; margin: 0; }
 fieldset legend { color: var(--muted); font-size: 12px; padding: 0 6px; }

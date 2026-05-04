@@ -44,7 +44,7 @@ func TestParseTemplates(t *testing.T) {
 			"Buckets": []any{}, "SuggestedDays": 7,
 		}}},
 		{"bucket_detail", baseView{Title: "Bucket: x", Username: "grom", Data: map[string]any{
-			"Bucket": "x", "Rules": []any{}, "PolicyJSON": "", "SuggestedDays": 7,
+			"Bucket": "x", "Rules": []any{}, "PolicyJSON": "", "PolicyClauses": []any{}, "SuggestedDays": 7,
 		}}},
 		{"accesskeys", baseView{Title: "AKs", Username: "grom", Data: map[string]any{
 			"Keys": []any{}, "NewAK": map[string]string(nil),

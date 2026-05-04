@@ -77,6 +77,7 @@ func (s *Server) GetBucketDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	policy, _ := s.MC.BucketPolicyJSON(ctx, name)
+	policyClauses := summarizeBucketPolicy(policy)
 
 	suggested := s.Cfg.LifecycleDays
 	if suggested == 0 {
@@ -91,6 +92,7 @@ func (s *Server) GetBucketDetail(w http.ResponseWriter, r *http.Request) {
 			"Bucket":        name,
 			"Rules":         rules,
 			"PolicyJSON":    policy,
+			"PolicyClauses": policyClauses,
 			"SuggestedDays": suggested,
 		},
 	})

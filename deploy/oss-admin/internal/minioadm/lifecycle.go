@@ -127,14 +127,17 @@ func (c *Client) DeleteRule(ctx context.Context, bucket, id string) error {
 	return c.SaveLifecycle(ctx, bucket, out)
 }
 
+// describeRule returns a one-line Chinese summary used as a fallback. Templates
+// usually render richer cards from the raw fields (ExpiryDays / Prefix / etc.)
+// so this is mostly for audit logs and contexts without a UI.
 func describeRule(r lifecycle.Rule) string {
 	if r.Expiration.Days > 0 {
 		if r.RuleFilter.Prefix != "" {
-			return fmt.Sprintf("expire after %d days (prefix %q)", int(r.Expiration.Days), r.RuleFilter.Prefix)
+			return fmt.Sprintf("上传 %d 天后自动删除（前缀 %q）", int(r.Expiration.Days), r.RuleFilter.Prefix)
 		}
-		return fmt.Sprintf("expire after %d days", int(r.Expiration.Days))
+		return fmt.Sprintf("上传 %d 天后自动删除", int(r.Expiration.Days))
 	}
-	return "(no expiration set)"
+	return "（未设置过期时间）"
 }
 
 // newRuleID returns a short, human-readable ID that doesn't collide with any
