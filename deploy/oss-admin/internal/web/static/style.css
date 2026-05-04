@@ -95,6 +95,12 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .callout-once { border-color: var(--warn); background: rgba(245,158,11,0.08); }
 .callout h3 { margin-top: 0; color: var(--warn); }
 
+/* AK form */
+fieldset { border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px; margin: 0; }
+fieldset legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
+label.inline { flex-direction: row; align-items: center; gap: 6px; display: inline-flex; margin-right: 16px; color: var(--fg); font-size: 13px; }
+.mode-block { padding: 12px; background: rgba(56,189,248,0.04); border-radius: 4px; margin-top: 8px; border: 1px dashed var(--border); }
+
 /* Login */
 .login-body {
   align-items: center;

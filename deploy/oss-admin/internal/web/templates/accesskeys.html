@@ -55,21 +55,67 @@
 
 <section>
   <h2>新建 Access Key</h2>
-  <p class="muted">桌面端用 <code>put-only</code>（只能 PUT，不能 GET/DELETE）；其他 policy 视用途而定。所有 policy 都是 MinIO 现存的 canned policy。</p>
-  <form method="post" action="/access-keys" class="form-grid">
+  <form method="post" action="/access-keys" class="ak-form">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-    <label>AccessKey<input name="access_key" required placeholder="例：ozon-desktop-2"></label>
-    <label>SecretKey（留空自动生成）<input name="secret_key" placeholder="留空自动生成 48-hex"></label>
-    <label>Policy
-      <select name="policy">
-        {{$default := .Data.DefaultPolicy}}
-        {{range .Data.Policies}}
-          <option value="{{.}}"{{if eq . $default}} selected{{end}}>{{.}}</option>
-        {{end}}
-      </select>
-    </label>
-    <button type="submit">创建</button>
+
+    <fieldset class="mode-picker">
+      <legend>作用域</legend>
+      <label class="inline"><input type="radio" name="mode" value="scoped" checked> 限定到 Bucket（推荐）</label>
+      <label class="inline"><input type="radio" name="mode" value="existing"> 使用现有 Policy（高级）</label>
+    </fieldset>
+
+    <div class="form-grid" style="margin-top:8px">
+      <label>AccessKey<input name="access_key" required placeholder="例：ozon-desktop-2"></label>
+      <label>SecretKey（留空自动生成）<input name="secret_key" placeholder="留空自动生成 48-hex"></label>
+    </div>
+
+    <!-- Scoped mode -->
+    <div class="mode-block" data-mode="scoped">
+      <p class="muted">从下面的 bucket 里选一只，权限会自动生成一条 <code>scoped-&lt;perm&gt;-&lt;bucket&gt;</code> policy 并绑到 AK 上（同名重复创建是幂等的）。</p>
+      <div class="form-grid">
+        <label>Bucket
+          <select name="bucket">
+            {{range .Data.Buckets}}<option value="{{.}}">{{.}}</option>{{else}}<option value="" disabled>无 bucket，请先建一个</option>{{end}}
+          </select>
+        </label>
+        <fieldset class="perm-picker">
+          <legend>权限</legend>
+          <label class="inline"><input type="radio" name="perm" value="w" checked> 只写（PutObject）</label>
+          <label class="inline"><input type="radio" name="perm" value="rw"> 读写</label>
+          <label class="inline"><input type="radio" name="perm" value="r"> 只读</label>
+        </fieldset>
+      </div>
+    </div>
+
+    <!-- Existing-policy mode -->
+    <div class="mode-block" data-mode="existing" hidden>
+      <p class="muted">直接绑 MinIO 现有的 canned policy。<code>readonly</code>/<code>readwrite</code> 等内置 policy 是<strong>全集群</strong>权限，谨慎使用。</p>
+      <label>Policy
+        <select name="policy">
+          {{$default := .Data.DefaultPolicy}}
+          {{range .Data.Policies}}
+            <option value="{{.}}"{{if eq . $default}} selected{{end}}>{{.}}</option>
+          {{end}}
+        </select>
+      </label>
+    </div>
+
+    <button type="submit" style="margin-top:12px">创建</button>
   </form>
 </section>
+
+<script>
+// Tiny mode toggle — no framework needed.
+(function () {
+  const radios = document.querySelectorAll('input[name="mode"]');
+  const blocks = document.querySelectorAll('.mode-block');
+  function sync() {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    blocks.forEach(b => b.hidden = b.dataset.mode !== mode);
+  }
+  radios.forEach(r => r.addEventListener('change', sync));
+  sync();
+})();
+</script>
 
 {{template "footer" .}}{{end}}

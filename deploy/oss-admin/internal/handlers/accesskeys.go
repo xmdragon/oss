@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/xmdragon/oss/deploy/oss-admin/internal/minioadm"
 )
@@ -23,6 +25,15 @@ func (s *Server) GetAccessKeys(w http.ResponseWriter, r *http.Request) {
 		// just the desktop default. Surface as a flash for visibility.
 		setFlash(w, "err", "policy 列表加载失败: "+perr.Error())
 		policies = []string{minioadm.PolicyDesktopAK}
+	}
+	buckets, berr := s.MC.ListBuckets(ctx)
+	if berr != nil {
+		// Same handling as policies — degrade gracefully.
+		setFlash(w, "err", "bucket 列表加载失败: "+berr.Error())
+	}
+	bucketNames := make([]string, 0, len(buckets))
+	for _, b := range buckets {
+		bucketNames = append(bucketNames, b.Name)
 	}
 
 	// New AK passed via query param after creation/rotation. We use a one-shot
@@ -44,28 +55,75 @@ func (s *Server) GetAccessKeys(w http.ResponseWriter, r *http.Request) {
 		Flash:     msg,
 		FlashKind: kind,
 		Data: map[string]any{
-			"Keys":            keys,
-			"NewAK":           newAK,
-			"Policies":        policies,
-			"DefaultPolicy":   minioadm.PolicyDesktopAK,
+			"Keys":          keys,
+			"NewAK":         newAK,
+			"Policies":      policies,
+			"DefaultPolicy": minioadm.PolicyDesktopAK,
+			"Buckets":       bucketNames,
 		},
 	})
 }
 
+// PostAccessKeyCreate has two modes selected via the `mode` form value:
+//
+//   - "scoped" (default): user picks a bucket + permission, we generate (or
+//     reuse) a canned policy named scoped-<perm>-<bucket> and attach it.
+//   - "existing": user picks one of MinIO's existing canned policies. This is
+//     the escape hatch for cluster-wide / admin AKs.
 func (s *Server) PostAccessKeyCreate(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := reqCtx(r)
+	// Scoped mode does an extra AddCannedPolicy round-trip; bump the budget.
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+
 	ak := r.FormValue("access_key")
 	sk := r.FormValue("secret_key")
-	policy := r.FormValue("policy")
-	if policy == "" {
-		policy = minioadm.PolicyDesktopAK
+	mode := r.FormValue("mode")
+	if mode == "" {
+		mode = "scoped"
 	}
 	if ak == "" {
 		setFlash(w, "err", "AccessKey 不能为空")
 		http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
 		return
 	}
+
+	var policy string
+	var err error
+	switch mode {
+	case "scoped":
+		bucket := r.FormValue("bucket")
+		perm := minioadm.Permission(r.FormValue("perm"))
+		if bucket == "" {
+			setFlash(w, "err", "请选择 Bucket")
+			http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
+			return
+		}
+		if !perm.IsValid() {
+			setFlash(w, "err", "权限值不合法（应为 w / r / rw）")
+			http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
+			return
+		}
+		policy, err = s.MC.EnsureScopedPolicy(ctx, bucket, perm)
+		if err != nil {
+			s.Audit.FromRequest(r, "policy.ensure", bucket+"/"+string(perm), "error", err.Error())
+			setFlash(w, "err", "policy 生成失败: "+err.Error())
+			http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
+			return
+		}
+		s.Audit.FromRequest(r, "policy.ensure", policy, "ok", "")
+	case "existing":
+		policy = r.FormValue("policy")
+		if policy == "" {
+			setFlash(w, "err", "请选择 Policy")
+			http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
+			return
+		}
+	default:
+		setFlash(w, "err", "未知 mode: "+mode)
+		http.Redirect(w, r, "/access-keys", http.StatusSeeOther)
+		return
+	}
+
 	created, err := s.MC.CreateAK(ctx, ak, sk, policy)
 	if err != nil {
 		s.Audit.FromRequest(r, "accesskey.create", ak, "error", err.Error())

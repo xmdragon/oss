@@ -49,6 +49,7 @@ func TestParseTemplates(t *testing.T) {
 		{"accesskeys", baseView{Title: "AKs", Username: "grom", Data: map[string]any{
 			"Keys": []any{}, "NewAK": map[string]string(nil),
 			"Policies": []string{"put-only", "readonly"}, "DefaultPolicy": "put-only",
+			"Buckets": []string{"products"},
 		}}},
 	}
 	for _, c := range cases {
