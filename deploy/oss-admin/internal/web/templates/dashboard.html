@@ -1,0 +1,39 @@
+{{define "dashboard"}}{{template "head" .}}
+<section class="cards">
+  <div class="card">
+    <div class="card-label">总用量</div>
+    <div class="card-value">{{humanSize .Data.TotalSize}}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">对象总数</div>
+    <div class="card-value">{{.Data.ObjectCount}}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Bucket 数</div>
+    <div class="card-value">{{.Data.BucketCount}}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">MinIO 健康</div>
+    <div class="card-value {{if .Data.Healthy}}ok{{else}}err{{end}}">{{if .Data.Healthy}}OK{{else}}DOWN{{end}}</div>
+  </div>
+</section>
+
+<section class="chart-section">
+  <h2>近 24 小时净增量</h2>
+  {{if .Data.ChartSVG}}
+    {{.Data.ChartSVG}}
+    <p class="muted">柱条 = 每小时对象总大小净变化（上传 − 生命周期删除）。负值代表删除多于上传。</p>
+  {{else}}
+    <p class="muted">采样数据不足（服务启动时间 &lt; 1 小时），稍后再看。</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>采样信息</h2>
+  <table class="kv">
+    <tr><th>最近采样时间</th><td>{{humanTime .Data.LatestSample}}</td></tr>
+    <tr><th>采样点数</th><td>{{.Data.SampleCount}}</td></tr>
+    <tr><th>MinIO endpoint</th><td>{{.Data.Endpoint}}</td></tr>
+  </table>
+</section>
+{{template "footer" .}}{{end}}

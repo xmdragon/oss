@@ -40,18 +40,15 @@ vnstat -d                # 每日
 vnstat -m                # 每月
 ```
 
-### 1.4 Web 管理端（MinIO Console）
+### 1.4 Web 管理端（自建 oss-admin）
 
-浏览器打开 **https://ossmanage.hjdtrading.com/** ，用 `/opt/oss/.env` 里的 `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` 登录。
+浏览器打开 **https://ossmanage.hjdtrading.com/** ，用 `oss-admin setup` 时设的管理员账号（默认用户名 `grom`）登录。详见 [admin-console.md](admin-console.md)。
 
-可用操作：浏览 bucket、上传/下载/删除对象、查看 lifecycle、管理 AK/SK、监控 IO。
+可用操作：概览（用量 / 24h 趋势）、Bucket 列表、Lifecycle 规则 CRUD、桌面端 AK 管理（建/启停/轮换/删）。
 
-查密码：
-```bash
-ssh oss 'grep ^MINIO_ROOT /opt/oss/.env'
-```
+> 历史背景：MinIO 官方 Console 自 2025 中砍掉了管理界面（社区版只剩 Object Browser），所以这里换成了我们自建的 oss-admin。MinIO 自带 Console 仍跑在 `127.0.0.1:9001`，应急时可 SSH 隧道访问。
 
-防护：独立子域名、标准 443 端口、LE 证书、密码 48 位随机。**勿把该密码发 IM**。
+防护：独立子域名、标准 443 端口、LE 证书、argon2id 密码、可选 TOTP 二步、登录限流、CSRF 防护、所有写操作审计日志。
 
 ---
 

@@ -51,7 +51,12 @@
     ├── .env.example                   # 环境变量模板
     ├── systemd/
     │   ├── minio.service              # MinIO systemd 单元
+    │   ├── oss-admin.service          # 自建管理 UI systemd 单元
     │   └── caddy.override.conf        # Caddy drop-in（加载 .env）
+    ├── oss-admin/                     # 自建管理 UI（Go，单二进制）
+    │   ├── cmd/oss-admin/             # main + setup/setpw 子命令
+    │   ├── internal/                  # auth / minioadm / handlers / web
+    │   └── bin/oss-admin-linux-amd64  # 预编译二进制（install.sh 用）
     └── ops/
         ├── healthcheck.sh             # 一键体检
         ├── smoke-test.sh              # PUT/GET/DELETE 端到端
@@ -85,6 +90,7 @@
 - [部署手册](docs/deployment.md) — 从裸机到跑通的完整命令
 - [**桌面端 API**](docs/api.md) — 桌面端开发者用
 - [运维手册](docs/operations.md) — 日常、监控、应急
+- [管理控制台](docs/admin-console.md) — `ossmanage.hjdtrading.com` 自建 UI
 
 ## 许可与责任
 

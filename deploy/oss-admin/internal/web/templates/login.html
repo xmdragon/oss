@@ -1,0 +1,26 @@
+{{define "login"}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 · OSS Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-body">
+<div class="login-card">
+  <h1>OSS Admin</h1>
+  {{if .Flash}}<div class="flash flash-{{.FlashKind}}">{{.Flash}}</div>{{end}}
+  <form method="post" action="/login">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <label>用户名<input name="username" required autofocus autocomplete="username"></label>
+    <label>密码<input name="password" type="password" required autocomplete="current-password"></label>
+    {{if .Data.TOTPEnabled}}
+    <label>TOTP 6 位码<input name="totp" inputmode="numeric" pattern="[0-9]{6}" required autocomplete="one-time-code"></label>
+    {{end}}
+    <button type="submit">登录</button>
+  </form>
+</div>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,35 @@
+{{define "head"}}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="csrf-token" content="{{.CSRFToken}}">
+<title>{{.Title}} · OSS Admin</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="sidebar">
+  <div class="brand">OSS Admin</div>
+  <ul>
+    <li><a href="/">概览</a></li>
+    <li><a href="/buckets">Buckets</a></li>
+    <li><a href="/access-keys">Access Keys</a></li>
+  </ul>
+  <div class="sidebar-foot">
+    <span class="user">👤 {{.Username}}</span>
+    <form method="post" action="/logout" style="display:inline">
+      <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+      <button class="link">退出</button>
+    </form>
+  </div>
+</nav>
+<main class="content">
+  <header class="page-head"><h1>{{.Title}}</h1></header>
+  {{if .Flash}}<div class="flash flash-{{.FlashKind}}">{{.Flash}}</div>{{end}}
+{{end}}
+
+{{define "footer"}}
+</main>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,18 @@
+{{define "buckets"}}{{template "head" .}}
+<table class="grid">
+  <thead><tr><th>名称</th><th class="num">大小</th><th class="num">对象数</th><th>Lifecycle</th><th></th></tr></thead>
+  <tbody>
+  {{range .Data.Buckets}}
+    <tr>
+      <td><a href="/buckets/{{.Name}}">{{.Name}}</a></td>
+      <td class="num">{{humanSize .Size}}</td>
+      <td class="num">{{.ObjectCount}}</td>
+      <td>{{if .HasLifecycle}}<span class="badge ok">已配置</span>{{else}}<span class="badge warn">未配置</span>{{end}}</td>
+      <td><a class="btn-mini" href="/buckets/{{.Name}}">详情</a></td>
+    </tr>
+  {{else}}
+    <tr><td colspan="5" class="muted">无 bucket。</td></tr>
+  {{end}}
+  </tbody>
+</table>
+{{template "footer" .}}{{end}}

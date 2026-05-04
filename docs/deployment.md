@@ -136,9 +136,18 @@ bash /opt/oss/ops/healthcheck.sh
 
 ---
 
-## 7. MinIO Web 控制台（可选）
+## 7. Web 管理控制台
 
-控制台默认绑在 `127.0.0.1:9001`，**不对公网暴露**。要看就 SSH 隧道：
+部署默认带一个**自建管理 UI**（`oss-admin`，挂在 `https://${ADMIN_HOST}`），登录后可改 lifecycle、轮换桌面端 AK、看 24h 趋势等。装完 `install.sh` 后再走一步：
+
+```bash
+sudo /usr/local/bin/oss-admin setup     # 设管理员密码 + 可选 TOTP
+sudo systemctl start oss-admin
+```
+
+完整说明见 [`admin-console.md`](admin-console.md)。
+
+MinIO 官方 Console 仍跑在 `127.0.0.1:9001`（loopback only，应急用）。要进就 SSH 隧道：
 
 ```bash
 ssh -L 9001:127.0.0.1:9001 root@<vps>

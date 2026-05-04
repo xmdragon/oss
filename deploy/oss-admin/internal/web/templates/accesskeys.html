@@ -1,0 +1,67 @@
+{{define "accesskeys"}}{{template "head" .}}
+
+{{if .Data.NewAK}}
+<div class="callout callout-once">
+  <h3>⚠ 仅显示一次的 SecretKey</h3>
+  <p>这是新创建/轮换的访问密钥。SecretKey 只会显示这一次，请立刻复制保存到桌面端构建配置中。</p>
+  <table class="kv">
+    <tr><th>AccessKey</th><td><code id="newAK">{{.Data.NewAK.AccessKey}}</code> <button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById('newAK').innerText)">复制</button></td></tr>
+    <tr><th>SecretKey</th><td><code id="newSK">{{.Data.NewAK.SecretKey}}</code> <button class="btn-mini" onclick="navigator.clipboard.writeText(document.getElementById('newSK').innerText)">复制</button></td></tr>
+  </table>
+</div>
+{{end}}
+
+<section>
+  <h2>所有 Access Keys</h2>
+  <table class="grid">
+    <thead><tr><th>AccessKey</th><th>策略</th><th>类型</th><th>状态</th><th></th></tr></thead>
+    <tbody>
+    {{range .Data.Keys}}
+      <tr>
+        <td><code>{{.AccessKey}}</code></td>
+        <td>{{range $i, $p := .Policies}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
+        <td>{{if .IsDesktop}}<span class="badge ok">桌面端</span>{{else}}<span class="badge">其他</span>{{end}}</td>
+        <td>{{if .Enabled}}<span class="badge ok">启用</span>{{else}}<span class="badge warn">停用</span>{{end}}</td>
+        <td>
+          {{if .Enabled}}
+            <form method="post" action="/access-keys/{{.AccessKey}}/disable" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+              <button class="btn-mini">停用</button>
+            </form>
+          {{else}}
+            <form method="post" action="/access-keys/{{.AccessKey}}/enable" style="display:inline">
+              <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+              <button class="btn-mini">启用</button>
+            </form>
+          {{end}}
+          {{if .IsDesktop}}
+            <form method="post" action="/access-keys/{{.AccessKey}}/rotate" style="display:inline" onsubmit="return confirm('为 {{.AccessKey}} 生成新 AK 并停用旧的？');">
+              <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+              <button class="btn-mini">轮换</button>
+            </form>
+          {{end}}
+          <form method="post" action="/access-keys/{{.AccessKey}}/delete" style="display:inline" onsubmit="return confirm('彻底删除 {{.AccessKey}}？此操作不可逆。');">
+            <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+            <button class="btn-mini danger">删除</button>
+          </form>
+        </td>
+      </tr>
+    {{else}}
+      <tr><td colspan="5" class="muted">无 access key。</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>新建桌面端 Access Key</h2>
+  <p class="muted">自动绑定 <code>put-only</code> 策略——只能 PUT，不能 GET/DELETE。</p>
+  <form method="post" action="/access-keys" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>AccessKey<input name="access_key" required placeholder="例：ozon-desktop-2"></label>
+    <label>SecretKey（留空自动生成）<input name="secret_key" placeholder="留空自动生成 48-hex"></label>
+    <button type="submit">创建</button>
+  </form>
+</section>
+
+{{template "footer" .}}{{end}}

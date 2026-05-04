@@ -1,0 +1,53 @@
+{{define "bucket_detail"}}{{template "head" .}}
+<p><a href="/buckets">← 返回 Bucket 列表</a></p>
+
+<section>
+  <h2>Lifecycle 规则</h2>
+  <table class="grid">
+    <thead><tr><th>ID</th><th>状态</th><th>Prefix</th><th class="num">过期天数</th><th>说明</th><th></th></tr></thead>
+    <tbody>
+    {{range .Data.Rules}}
+      <tr>
+        <td><code>{{.ID}}</code></td>
+        <td>{{if eq .Status "Enabled"}}<span class="badge ok">Enabled</span>{{else}}<span class="badge warn">{{.Status}}</span>{{end}}</td>
+        <td>{{if .Prefix}}<code>{{.Prefix}}</code>{{else}}<span class="muted">(无)</span>{{end}}</td>
+        <td class="num">{{.ExpiryDays}}</td>
+        <td>{{.Description}}</td>
+        <td>
+          <form method="post" action="/buckets/{{$.Data.Bucket}}/lifecycle/delete" style="display:inline" onsubmit="return confirm('删除规则 {{.ID}}？');">
+            <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+            <input type="hidden" name="id" value="{{.ID}}">
+            <button class="btn-mini danger">删除</button>
+          </form>
+        </td>
+      </tr>
+    {{else}}
+      <tr><td colspan="6" class="muted">无规则。</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+
+  <h3>新增规则</h3>
+  <form method="post" action="/buckets/{{.Data.Bucket}}/lifecycle" class="form-grid">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>过期天数<input name="expiry_days" type="number" min="1" required value="{{.Data.SuggestedDays}}"></label>
+    <label>Prefix（可选）<input name="prefix" placeholder="例：tmp/"></label>
+    <label>状态
+      <select name="status">
+        <option value="Enabled">Enabled</option>
+        <option value="Disabled">Disabled</option>
+      </select>
+    </label>
+    <button type="submit">添加</button>
+  </form>
+</section>
+
+<section>
+  <h2>Bucket Policy</h2>
+  {{if .Data.PolicyJSON}}
+    <pre class="codeblock">{{.Data.PolicyJSON}}</pre>
+  {{else}}
+    <p class="muted">未设置 bucket policy。</p>
+  {{end}}
+</section>
+{{template "footer" .}}{{end}}

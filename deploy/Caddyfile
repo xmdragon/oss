@@ -62,24 +62,17 @@
     }
 }
 
-# ─── MinIO Console 管理端（独立子域名，标准 443）──────────────
+# ─── OSS Admin Console 管理端（独立子域名，标准 443）──────────
 # 访问：https://ossmanage.hjdtrading.com
-# 登录用 .env 里的 MINIO_ROOT_USER / MINIO_ROOT_PASSWORD
-# 用子域名而不是 {$PUBLIC_HOST}:9443 的原因：
-#   1) 部分 ISP 对非 443 HTTPS 做干扰，浏览器报 ERR_SSL_PROTOCOL_ERROR
-#   2) MinIO Console WS 的 Origin 校验对非标准端口有 bug
-# 走标准 443 两个问题都没了
+# 用我们自建的 oss-admin（监听 127.0.0.1:9002），替代了被官方阉割的
+# MinIO Console。MinIO 自带 Console 仍跑在 127.0.0.1:9001（loopback only），
+# 应急时可 SSH 隧道：ssh -L 9001:127.0.0.1:9001 root@vps
 {$ADMIN_HOST} {
     # 显式走 Let's Encrypt，否则 Caddy 会误用 *.hjdtrading.com 的 CF Origin Cert
     # （CF Origin CA 浏览器不认，而 ossmanage 是灰色云直连，必须公共 CA 证书）
     tls {$ACME_EMAIL}
 
-    reverse_proxy 127.0.0.1:9001 {
-        transport http {
-            read_timeout 5m
-            write_timeout 5m
-        }
-        header_up Host {host}
+    reverse_proxy 127.0.0.1:9002 {
         header_up X-Real-IP {remote_host}
     }
 

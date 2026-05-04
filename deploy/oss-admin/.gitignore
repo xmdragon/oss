@@ -1,0 +1,4 @@
+# 构建产物保留 bin/oss-admin-linux-amd64（部署用），其它 ignore
+/tmp
+*.log
+/coverage.out

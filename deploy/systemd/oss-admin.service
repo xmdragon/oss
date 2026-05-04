@@ -1,0 +1,40 @@
+[Unit]
+Description=OSS Admin Console (lightweight self-service UI for MinIO)
+Documentation=file:///opt/oss/docs/admin-console.md
+After=minio.service network-online.target
+Wants=network-online.target
+Requires=minio.service
+AssertFileIsExecutable=/usr/local/bin/oss-admin
+AssertFileNotEmpty=/opt/oss/.env
+AssertFileNotEmpty=/opt/oss/admin.env
+
+[Service]
+Type=simple
+User=oss-admin
+Group=oss-admin
+ExecStart=/usr/local/bin/oss-admin serve
+Restart=on-failure
+RestartSec=3
+
+# 资源限制
+LimitNOFILE=4096
+
+# 安全加固
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateTmp=yes
+PrivateDevices=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+# 日志目录是写权限的唯一去处
+ReadWritePaths=/var/log/oss-admin
+
+[Install]
+WantedBy=multi-user.target

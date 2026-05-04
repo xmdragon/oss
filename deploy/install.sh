@@ -86,32 +86,49 @@ if [ ! -f "$OSS_DIR/.env" ]; then
     sed -e "s|^MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=$ROOT_PW|" \
         -e "s|^DESKTOP_SECRET_KEY=.*|DESKTOP_SECRET_KEY=$DESK_SK|" \
         "$SCRIPT_DIR/.env.example" > "$OSS_DIR/.env"
-    chmod 600 "$OSS_DIR/.env"
+    # 0640 + minio-user 组：minio 进程 own，oss-admin 通过加入该组获得只读
+    chmod 640 "$OSS_DIR/.env"
     chown minio-user:minio-user "$OSS_DIR/.env"
     echo "   ✓ 新生成 .env（secret 已随机化，记得备份 $OSS_DIR/.env）"
 else
     log "$OSS_DIR/.env 已存在，跳过生成"
-    # 迁移：补 ADMIN_HOST（Console 子域名）
+    # 迁移：补 ADMIN_HOST（管理子域名）
     if ! grep -q '^ADMIN_HOST=' "$OSS_DIR/.env"; then
         log "  ↳ 补写 ADMIN_HOST（默认 ossmanage.hjdtrading.com，按需修改）"
         echo 'ADMIN_HOST=ossmanage.hjdtrading.com' >> "$OSS_DIR/.env"
     fi
-    # 迁移：老版本的 MINIO_BROWSER_REDIRECT_URL 用 :9443，切子域名后改写
-    ADM_HOST="$(grep '^ADMIN_HOST=' "$OSS_DIR/.env" | cut -d= -f2-)"
-    if grep -q '^MINIO_BROWSER_REDIRECT_URL=.*:9443' "$OSS_DIR/.env"; then
-        log "  ↳ 更新 MINIO_BROWSER_REDIRECT_URL 指向 ${ADM_HOST}"
-        sed -i "s|^MINIO_BROWSER_REDIRECT_URL=.*|MINIO_BROWSER_REDIRECT_URL=https://${ADM_HOST}|" "$OSS_DIR/.env"
-    elif ! grep -q '^MINIO_BROWSER_REDIRECT_URL=' "$OSS_DIR/.env"; then
-        log "  ↳ 补写 MINIO_BROWSER_REDIRECT_URL（Console 公网 URL）"
-        echo "MINIO_BROWSER_REDIRECT_URL=https://${ADM_HOST}" >> "$OSS_DIR/.env"
+    # 迁移：旧版用 MinIO Console，需要 MINIO_BROWSER_REDIRECT_URL；
+    # 现在改用 oss-admin，该变量不再需要，留着会导致 SSH 隧道访问
+    # 官方 Console 时被错误重定向到 ossmanage（已被 oss-admin 接管）。
+    if grep -q '^MINIO_BROWSER_REDIRECT_URL=' "$OSS_DIR/.env"; then
+        log "  ↳ 移除过时的 MINIO_BROWSER_REDIRECT_URL（管理 UI 已切换到 oss-admin）"
+        sed -i '/^MINIO_BROWSER_REDIRECT_URL=/d' "$OSS_DIR/.env"
     fi
 fi
 
 # ─── 7. systemd 单元 ─────────────────────────────────────
 log "安装 systemd 单元"
 cp "$SCRIPT_DIR/systemd/minio.service" /etc/systemd/system/minio.service
+cp "$SCRIPT_DIR/systemd/oss-admin.service" /etc/systemd/system/oss-admin.service
 mkdir -p /etc/systemd/system/caddy.service.d
 cp "$SCRIPT_DIR/systemd/caddy.override.conf" /etc/systemd/system/caddy.service.d/override.conf
+
+# ─── 7b. oss-admin 用户、二进制、日志目录 ────────────────
+log "安装 oss-admin（自建管理 UI）"
+if ! id oss-admin >/dev/null 2>&1; then
+    useradd -r -s /sbin/nologin -d /nonexistent oss-admin
+fi
+# 让 oss-admin 能读 /opt/oss/.env（minio-user 组，0640）
+usermod -a -G minio-user oss-admin
+# 老安装可能 .env 还是 0600，这里同步放成 0640
+[ -f "$OSS_DIR/.env" ] && chmod 640 "$OSS_DIR/.env" && chown minio-user:minio-user "$OSS_DIR/.env"
+
+ADMIN_BIN="$SCRIPT_DIR/oss-admin/bin/oss-admin-linux-amd64"
+[ -x "$ADMIN_BIN" ] || die "未找到 oss-admin 二进制：$ADMIN_BIN（在开发机执行 cd deploy/oss-admin && make build 后再 git add）"
+install -m 0755 "$ADMIN_BIN" /usr/local/bin/oss-admin
+mkdir -p /var/log/oss-admin
+chown oss-admin:oss-admin /var/log/oss-admin
+chmod 0750 /var/log/oss-admin
 
 # ─── 8. Caddyfile ────────────────────────────────────────
 log "安装 Caddyfile"
@@ -140,6 +157,9 @@ log "重启 caddy（拿 .env 里的域名）"
 systemctl restart caddy
 systemctl enable caddy
 
+# oss-admin 需要先 setup 才能起；这里只 daemon-reload + enable，由用户跑 setup 之后再 start
+systemctl enable oss-admin >/dev/null 2>&1 || true
+
 # 等一下让 Caddy 去签 LE
 sleep 3
 systemctl --no-pager status minio caddy | head -30
@@ -150,8 +170,13 @@ cat <<DONE
   安装完成
 ================================================================
   下一步：
-    bash $OSS_DIR/init-bucket.sh    # 建 bucket + 策略 + lifecycle
-    bash $OSS_DIR/ops/smoke-test.sh # 端到端自测
+    1) bash $OSS_DIR/init-bucket.sh    # 建 bucket + 策略 + lifecycle
+    2) sudo /usr/local/bin/oss-admin setup
+       # 交互式：设定管理员密码 + （可选）TOTP
+       # 写入 /opt/oss/admin.env (chmod 600)
+    3) sudo systemctl start oss-admin
+       # 之后访问 https://${ADMIN_HOST:-ossmanage.<domain>}
+    4) bash $OSS_DIR/ops/smoke-test.sh # 端到端自测
 
   注意：首次访问 https://${PUBLIC_HOST:-<domain>} 时 Caddy 会自动签证书，
   若失败请：
