@@ -98,3 +98,37 @@
         format json
     }
 }
+
+# ─── image-api（AI 改图 + 改文字） ─────────────────────────────
+# 访问：https://ai.hjdtrading.com
+# 后端：本机 Node 进程 listen 127.0.0.1:8787（与 MinIO 同机部署，但
+# 域名独立解耦 —— 后期可迁机器只改 DNS A 记录）。CF DNS-only 灰云。
+ai.hjdtrading.com {
+    # 显式 LE（同 ADMIN_HOST 风格），灰云直连必须公共 CA 证书
+    tls {$ACME_EMAIL}
+
+    encode gzip
+
+    # 桌面端请求体上限 1MB（足够 image-jobs / text-rewrite payload）
+    request_body {
+        max_size 1MB
+    }
+
+    # 路由全部 path 到本机 Node image-api
+    reverse_proxy 127.0.0.1:8787 {
+        header_up X-Real-IP {remote_host}
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/ai-access.log {
+            roll_size 50mb
+            roll_keep 4
+        }
+        format json
+    }
+}
