@@ -183,6 +183,6 @@ cat <<DONE
     journalctl -u caddy -n 60 --no-pager
 
   .env 里的 AK/SK（勿外传）：
-    cat $OSS_DIR/.env | grep -E '^(DESKTOP|MINIO_ROOT)'
+    cat $OSS_DIR/.env | grep -E '^(DESKTOP|AI_IMAGE|MINIO_ROOT)'
 ================================================================
 DONE
