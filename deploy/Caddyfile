@@ -25,9 +25,18 @@
 
     encode zstd gzip
 
-    # 限制请求体 100MB
+    # 限制请求体 100MB（结果图 / 视频等其他 prefix 用）
     request_body {
         max_size 100MB
+    }
+
+    # image-api 入参图 prefix 收紧到 5MB（蓝图 v3 §5.5 / codex r2 #4）。
+    # 桌面端 PUT 入参图走 oss.hjdtrading.com presigned URL，bucket 是 ai-image，
+    # key 形如 inputs/YYYY/MM/DD/<user_id>/<ulid>.{jpg|png|webp}。
+    # 5MB 上限由本路径强制（412 Body too large），image-api 端 HeadObject 二次校验。
+    @inputs path /ai-image/inputs/*
+    request_body @inputs {
+        max_size 5MB
     }
 
     # MinIO S3 API 反代（MinIO 绑在 127.0.0.1:9000，只本机可达）
