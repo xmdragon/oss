@@ -73,7 +73,7 @@ func runServe() {
 		log.Fatalf("config invalid: %v", err)
 	}
 
-	mc, err := minioadm.New("127.0.0.1:9000", cfg.MinIORootUser, cfg.MinIORootPassword, cfg.BucketName)
+	mc, err := minioadm.New("127.0.0.1:9000", cfg.MinIORootUser, cfg.MinIORootPassword, cfg.BucketName, cfg.PublicHost)
 	if err != nil {
 		log.Fatalf("minio client: %v", err)
 	}

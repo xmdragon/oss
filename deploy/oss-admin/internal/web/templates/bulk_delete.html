@@ -1,0 +1,71 @@
+{{define "bulk_delete"}}{{template "head" .}}
+<p>
+  <a href="/buckets/{{.Data.Bucket}}/objects?prefix={{.Data.Prefix}}">← 返回对象列表</a>
+  &nbsp;|&nbsp;
+  <a href="/buckets/{{.Data.Bucket}}">{{.Data.Bucket}} 详情</a>
+</p>
+
+<div class="callout">
+  <h3>⚠ 一次性硬删除（绕过 lifecycle）</h3>
+  <p class="muted" style="margin:6px 0 0">
+    这里删除的是<strong>已经存在</strong>的对象；不会影响 lifecycle 规则。<br>
+    单次上限 {{.Data.ScanLimit}} 个对象，超出请多次点击或改用 lifecycle 规则自动清理。<br>
+    操作同步执行，浏览器请保持页面不要刷新。
+  </p>
+</div>
+
+<section>
+  <h2>第一步：扫描预览</h2>
+  <form method="get" action="/buckets/{{.Data.Bucket}}/objects/bulk-delete" class="form-grid">
+    <label>删除早于多少天前的对象
+      <input name="days" type="number" min="1" required value="{{.Data.DaysInput}}" placeholder="例：30">
+    </label>
+    <label>Prefix（可选，仅限定前缀范围）
+      <input name="prefix" value="{{.Data.Prefix}}" placeholder="例：tmp/">
+    </label>
+    <button type="submit">扫描预览</button>
+  </form>
+  {{if .Data.FormError}}<p class="flash flash-err">{{.Data.FormError}}</p>{{end}}
+</section>
+
+{{with .Data.Scan}}
+  <section>
+    <h2>第二步：确认执行</h2>
+    <div class="callout">
+      <p>截止时间：<code>{{humanTime .Cutoff}}</code>（早于此时间上传的对象将被删除）</p>
+      <p>匹配范围：{{if .Prefix}}前缀 <code>{{.Prefix}}</code>{{else}}整个 bucket{{end}}</p>
+      <p>
+        <strong>共 {{.Count}} 个对象 / {{humanSize .TotalBytes}}</strong>
+        <span class="muted">（共扫描 {{.Scanned}} 个对象）</span>
+        {{if .Truncated}}<br><span class="badge warn">已达 {{$.Data.ScanLimit}} 个上限，可能还有更多未列出</span>{{end}}
+      </p>
+    </div>
+
+    {{if gt .Count 0}}
+      <details>
+        <summary class="muted">预览前 {{if gt .Count 50}}50{{else}}{{.Count}}{{end}} 个 key</summary>
+        <table class="grid object-table" style="margin-top:8px">
+          <thead><tr><th>Key</th><th class="num">大小</th><th>最后修改</th></tr></thead>
+          <tbody>
+            {{range $i, $o := .Objects}}
+              {{if lt $i 50}}
+                <tr><td class="obj-key">{{$o.Key}}</td><td class="num">{{humanSize $o.Size}}</td><td>{{humanTime $o.LastModified}}</td></tr>
+              {{end}}
+            {{end}}
+          </tbody>
+        </table>
+      </details>
+
+      <form method="post" action="/buckets/{{$.Data.Bucket}}/objects/bulk-delete" style="margin-top:16px" onsubmit="return confirm('确定删除 {{.Count}} 个对象？此操作不可撤销。');">
+        <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+        <input type="hidden" name="prefix" value="{{.Prefix}}">
+        <input type="hidden" name="cutoff_unix" value="{{$.Data.CutoffUnix}}">
+        <input type="hidden" name="confirm" value="yes">
+        <button class="danger">确认执行删除 {{.Count}} 个对象</button>
+      </form>
+    {{else}}
+      <p class="muted">没有匹配的对象，无需执行。</p>
+    {{end}}
+  </section>
+{{end}}
+{{template "footer" .}}{{end}}

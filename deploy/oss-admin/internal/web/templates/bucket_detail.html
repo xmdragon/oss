@@ -1,5 +1,11 @@
 {{define "bucket_detail"}}{{template "head" .}}
-<p><a href="/buckets">← 返回 Bucket 列表</a></p>
+<p>
+  <a href="/buckets">← 返回 Bucket 列表</a>
+  &nbsp;|&nbsp;
+  <a href="/buckets/{{.Data.Bucket}}/objects">📦 浏览对象</a>
+  &nbsp;|&nbsp;
+  <a href="/buckets/{{.Data.Bucket}}/objects/bulk-delete">🗑 批量删除</a>
+</p>
 
 <section>
   <h2>Lifecycle 规则</h2>

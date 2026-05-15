@@ -1,0 +1,40 @@
+{{define "object_detail"}}{{template "head" .}}
+<p><a href="{{.Data.BackURL}}">← 返回对象列表</a></p>
+
+<section>
+  <h2>元数据</h2>
+  <table class="kv">
+    <tr><th>Bucket</th><td><code>{{.Data.Bucket}}</code></td></tr>
+    <tr><th>Key</th><td><code>{{.Data.Key}}</code></td></tr>
+    <tr><th>大小</th><td>{{humanSize .Data.Info.Size}} <span class="muted">({{.Data.Info.Size}} bytes)</span></td></tr>
+    <tr><th>最后修改</th><td>{{humanTime .Data.Info.LastModified}}</td></tr>
+    <tr><th>Content-Type</th><td>{{if .Data.Info.ContentType}}<code>{{.Data.Info.ContentType}}</code>{{else}}<span class="muted">—</span>{{end}}</td></tr>
+    <tr><th>ETag</th><td><code>{{.Data.Info.ETag}}</code></td></tr>
+    {{if .Data.Info.StorageClass}}<tr><th>Storage Class</th><td>{{.Data.Info.StorageClass}}</td></tr>{{end}}
+  </table>
+</section>
+
+<section>
+  <h2>下载 / 预览</h2>
+  {{if .Data.PresignedURL}}
+    <p>下面这条临时链接 <strong>{{.Data.PresignMinutes}} 分钟</strong> 内有效。点击在新标签页打开（浏览器按 Content-Type 自动预览或下载）：</p>
+    <p><a href="{{.Data.PresignedURL}}" target="_blank" rel="noopener noreferrer" class="btn-mini">🔗 打开 / 下载</a></p>
+    <details class="raw-json">
+      <summary>查看完整 URL（可复制分享）</summary>
+      <pre class="codeblock">{{.Data.PresignedURL}}</pre>
+    </details>
+  {{else}}
+    <p class="muted">无法生成访问链接：{{.Data.PresignError}}</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>删除</h2>
+  <form method="post" action="/buckets/{{.Data.Bucket}}/objects/delete" onsubmit="return confirm('确定删除 {{.Data.Key}}？此操作不可撤销。');">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <input type="hidden" name="key" value="{{.Data.Key}}">
+    <input type="hidden" name="return_to" value="/buckets/{{.Data.Bucket}}/objects">
+    <button class="danger">删除此对象</button>
+  </form>
+</section>
+{{template "footer" .}}{{end}}
