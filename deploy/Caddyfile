@@ -1,6 +1,8 @@
 # Ozon 图片暂存 —— Caddy 反代配置
 # 部署时由 install.sh 复制到 /etc/caddy/Caddyfile
-# {$PUBLIC_HOST} / {$ACME_EMAIL} 来自 systemd drop-in 的 /opt/oss/.env
+# {$PUBLIC_HOST} / {$ADMIN_HOST} / {$IMAGE_API_HOST} / {$ACME_EMAIL}
+# 都来自 systemd drop-in 的 /opt/oss/.env，让同一份 Caddyfile 跨多区域复用
+# （oss / oss-kr 等不同节点用各自的 .env 区分对外域名）
 
 {
     email {$ACME_EMAIL}
@@ -100,10 +102,10 @@
 }
 
 # ─── image-api（AI 改图 + 改文字） ─────────────────────────────
-# 访问：https://ai.hjdtrading.com
+# 访问：https://{$IMAGE_API_HOST}（生产例：ai.hjdtrading.com / ai-kr.hjdtrading.com）
 # 后端：本机 Node 进程 listen 127.0.0.1:8787（与 MinIO 同机部署，但
 # 域名独立解耦 —— 后期可迁机器只改 DNS A 记录）。CF DNS-only 灰云。
-ai.hjdtrading.com {
+{$IMAGE_API_HOST} {
     # 显式 LE（同 ADMIN_HOST 风格），灰云直连必须公共 CA 证书
     tls {$ACME_EMAIL}
 
