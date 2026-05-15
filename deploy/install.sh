@@ -97,6 +97,13 @@ else
         log "  ↳ 补写 ADMIN_HOST（默认 ossmanage.hjdtrading.com，按需修改）"
         echo 'ADMIN_HOST=ossmanage.hjdtrading.com' >> "$OSS_DIR/.env"
     fi
+    # 迁移：补 IMAGE_API_HOST（image-api vhost 占位符）。
+    # Caddyfile 把 image-api 的站点地址改成 {$IMAGE_API_HOST}，旧节点 .env
+    # 里没这一行，Caddy 会展开成空字符串导致站点地址非法、reload 失败。
+    if ! grep -q '^IMAGE_API_HOST=' "$OSS_DIR/.env"; then
+        log "  ↳ 补写 IMAGE_API_HOST（默认 ai.hjdtrading.com，KR 节点改 ai-kr.hjdtrading.com）"
+        echo 'IMAGE_API_HOST=ai.hjdtrading.com' >> "$OSS_DIR/.env"
+    fi
     # 迁移：旧版用 MinIO Console，需要 MINIO_BROWSER_REDIRECT_URL；
     # 现在改用 oss-admin，该变量不再需要，留着会导致 SSH 隧道访问
     # 官方 Console 时被错误重定向到 ossmanage（已被 oss-admin 接管）。
