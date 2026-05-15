@@ -245,25 +245,41 @@ func (s *Server) PostBulkDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	result := s.MC.BulkRemove(ctx, bucket, keys)
 
+	// Submitted < Requested means ctx was cancelled before the feeder
+	// goroutine queued every key — surface that distinctly from "minio
+	// returned an error" so the operator knows there's residue to retry.
+	partial := result.Submitted < result.Requested
 	note := "cutoff=" + cutoff.UTC().Format(time.RFC3339) +
 		" prefix=" + prefix +
 		" requested=" + strconv.Itoa(result.Requested) +
+		" submitted=" + strconv.Itoa(result.Submitted) +
 		" removed=" + strconv.Itoa(result.Removed) +
 		" errors=" + strconv.Itoa(len(result.Errors))
 	if scan.Truncated {
 		note += " truncated=true"
 	}
+	if partial {
+		note += " partial=true"
+	}
 	resultLabel := "ok"
-	if len(result.Errors) > 0 {
+	if len(result.Errors) > 0 || partial {
 		resultLabel = "error"
 	}
 	s.Audit.FromRequest(r, "object.bulk_delete", bucket+"/"+prefix, resultLabel, note)
 
-	if len(result.Errors) > 0 {
+	switch {
+	case partial:
+		// Some keys never made it to MinIO — operator must re-run.
+		setFlash(w, "err", "已删除 "+strconv.Itoa(result.Removed)+
+			" / "+strconv.Itoa(result.Requested)+" 个对象，剩余 "+
+			strconv.Itoa(result.Requested-result.Submitted)+
+			" 个因超时未提交（请重试清理），"+
+			strconv.Itoa(len(result.Errors))+" 个 MinIO 返回失败")
+	case len(result.Errors) > 0:
 		setFlash(w, "err", "已删除 "+strconv.Itoa(result.Removed)+
 			" / "+strconv.Itoa(result.Requested)+" 个对象，"+
 			strconv.Itoa(len(result.Errors))+" 个失败（详见 audit.log）")
-	} else {
+	default:
 		extra := ""
 		if scan.Truncated {
 			extra = "（已达单次上限 " + strconv.Itoa(minioadm.ScanLimit) + "，可再次执行清理剩余）"

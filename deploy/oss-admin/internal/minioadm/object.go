@@ -196,42 +196,61 @@ func (c *Client) ScanByAge(ctx context.Context, bucket, prefix string, cutoff ti
 
 // BulkRemoveResult reports outcomes from RemoveObjects. Errors is capped at
 // errorSampleLimit to keep audit/log lines bounded — full failure traces would
-// go in MinIO logs anyway.
+// go in MinIO logs anyway. Submitted < Requested means the feeder hit
+// ctx cancellation before queuing every key — those unsubmitted keys remain in
+// the bucket and are not counted as either success or error.
 type BulkRemoveResult struct {
 	Requested int
+	Submitted int
 	Removed   int
 	Errors    []string
 }
 
 const errorSampleLimit = 20
 
-// BulkRemove deletes the given keys via the multi-object delete API. The
-// minio-go channel returns *errors only*, so we initialise Removed to the
-// request size and decrement on each error.
+// BulkRemove deletes the given keys via the multi-object delete API. We track
+// how many keys actually made it into the feeder channel (Submitted) so that a
+// ctx cancellation mid-feed doesn't make us claim we removed more than we did.
+// minio-go's RemoveObjects channel emits only errors; success count is derived
+// as Submitted − len(errors-from-minio).
 func (c *Client) BulkRemove(ctx context.Context, bucket string, keys []string) *BulkRemoveResult {
-	result := &BulkRemoveResult{Requested: len(keys), Removed: len(keys)}
+	result := &BulkRemoveResult{Requested: len(keys)}
 	if len(keys) == 0 {
 		return result
 	}
+	// submitted is written only by the feeder goroutine and read only after
+	// the error channel from RemoveObjects closes. The errCh close happens-
+	// after objCh close (RemoveObjects must drain it first), and objCh close
+	// happens-after the feeder's last write, so the read is race-free.
+	submitted := 0
 	objCh := make(chan minio.ObjectInfo, 1)
 	go func() {
 		defer close(objCh)
 		for _, k := range keys {
 			select {
 			case objCh <- minio.ObjectInfo{Key: k}:
+				submitted++
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
+	errCount := 0
 	for e := range c.S3.RemoveObjects(ctx, bucket, objCh, minio.RemoveObjectsOptions{}) {
 		if e.Err == nil {
 			continue
 		}
-		result.Removed--
+		errCount++
 		if len(result.Errors) < errorSampleLimit {
 			result.Errors = append(result.Errors, e.ObjectName+": "+e.Err.Error())
 		}
+	}
+	result.Submitted = submitted
+	result.Removed = submitted - errCount
+	if result.Removed < 0 {
+		// Defensive: shouldn't happen (minio-go shouldn't emit more errors
+		// than objects sent), but clamp so callers never see a negative.
+		result.Removed = 0
 	}
 	return result
 }
