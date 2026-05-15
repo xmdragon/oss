@@ -1,0 +1,76 @@
+{{define "objects"}}{{template "head" .}}
+<p>
+  <a href="/buckets/{{.Data.Bucket}}">← 返回 {{.Data.Bucket}} 详情</a>
+  &nbsp;|&nbsp;
+  <a href="/buckets/{{.Data.Bucket}}/objects/bulk-delete">🗑 按时间批量删除</a>
+</p>
+
+<form method="get" action="/buckets/{{.Data.Bucket}}/objects" class="form-grid">
+  <label>前缀过滤
+    <input name="prefix" value="{{.Data.Prefix}}" placeholder="例：images/2025/">
+  </label>
+  <label>每页条数
+    <select name="size">
+      {{$cur := .Data.PageSize}}
+      {{range .Data.PageSizes}}
+        <option value="{{.}}"{{if eq . $cur}} selected{{end}}>{{.}}</option>
+      {{end}}
+    </select>
+  </label>
+  <button type="submit">查询</button>
+</form>
+
+<p class="muted" style="margin-top:8px">
+  本页共 {{len .Data.Page.Objects}} 个对象{{if .Data.Cursor}}，起始游标 <code>{{.Data.Cursor}}</code>{{end}}。
+</p>
+
+<table class="grid object-table">
+  <thead>
+    <tr>
+      <th>Key</th>
+      <th class="num">大小</th>
+      <th>最后修改</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {{$bucket := .Data.Bucket}}
+  {{$csrf := .CSRFToken}}
+  {{$prefix := .Data.Prefix}}
+  {{$cursor := .Data.Cursor}}
+  {{$size := .Data.PageSize}}
+  {{range .Data.Page.Objects}}
+    <tr>
+      <td class="obj-key"><a href="/buckets/{{$bucket}}/objects/view?key={{.Key}}">{{.Key}}</a></td>
+      <td class="num">{{humanSize .Size}}</td>
+      <td>{{humanTime .LastModified}}</td>
+      <td>
+        <form method="post" action="/buckets/{{$bucket}}/objects/delete" style="display:inline" onsubmit="return confirm('删除对象 {{.Key}}？此操作不可撤销。');">
+          <input type="hidden" name="_csrf" value="{{$csrf}}">
+          <input type="hidden" name="key" value="{{.Key}}">
+          <input type="hidden" name="return_to" value="/buckets/{{$bucket}}/objects?prefix={{$prefix}}&cursor={{$cursor}}&size={{$size}}">
+          <button class="btn-mini danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {{else}}
+    <tr><td colspan="4" class="muted">无对象。</td></tr>
+  {{end}}
+  </tbody>
+</table>
+
+<div class="pager">
+  {{if or .Data.Prefix .Data.Cursor}}
+    <a href="/buckets/{{.Data.Bucket}}/objects?prefix={{.Data.Prefix}}&size={{.Data.PageSize}}">⟲ 回到首页</a>
+  {{end}}
+  {{if .Data.Page.Truncated}}
+    <a class="btn-mini" href="/buckets/{{.Data.Bucket}}/objects?prefix={{.Data.Prefix}}&cursor={{.Data.Page.NextCursor}}&size={{.Data.PageSize}}">下一页 →</a>
+  {{else}}
+    <span class="muted">已是最后一页</span>
+  {{end}}
+</div>
+
+{{if not .Data.HasPresign}}
+  <p class="muted" style="margin-top:16px">⚠ PUBLIC_HOST 未配置，对象详情页将无法生成可访问的 presigned URL。</p>
+{{end}}
+{{template "footer" .}}{{end}}

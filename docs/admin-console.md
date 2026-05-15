@@ -9,9 +9,17 @@
 |---|---|
 | 概览 | 总用量 / 对象数 / Bucket 数 / MinIO 健康；近 24h 净增量 SVG 图 |
 | Buckets | 列表、详情、bucket policy 只读、lifecycle 规则 CRUD |
+| Objects | 浏览（前缀过滤 + 100/200/500/1000 分页）、单对象详情（含 5min presigned URL）、单对象删除、按时间批量删除（早于 N 天） |
 | Access Keys | 列表、新建桌面端 AK（自动绑 `put-only` policy）、启用/停用、轮换、删除 |
 
 所有写操作记审计日志：`/var/log/oss-admin/audit.log`，每行一条 JSON。
+
+**对象操作的边界（重要）**
+
+- 分页强制服务端校验，下拉只允许 100/200/500/1000，默认 100；不提供"上一页"（cursor 单向，前进用 `?cursor=`，回退点"⟲ 回到首页"）。
+- presigned URL 签名指向 `PUBLIC_HOST` + HTTPS（Caddy `header_up Host {host}` 保证 MinIO 校验通过），有效期固定 5 分钟。
+- 批量删除走"扫描预览 → 确认执行"两步，单次硬上限 10000 个对象；超出需多次点击，或改用 lifecycle 规则自动清理。预览页面的 `cutoff_unix` 会回传给确认表单，避免两次点击之间因时差多删/少删。
+- 批量删除同步阻塞执行，浏览器不要刷新；服务端 60s 超时（HTTP 层），MinIO 多对象 DELETE 批量很快，10000 个对象典型耗时几秒。
 
 ## 2. 首次安装
 

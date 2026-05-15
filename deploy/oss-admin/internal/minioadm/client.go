@@ -26,10 +26,19 @@ type Client struct {
 	// Endpoint is the host:port we connect to (always 127.0.0.1:9000 in
 	// production — both clients are loopback-only).
 	Endpoint string
+	// Presign is an extra S3 client whose endpoint is the *public* host. It is
+	// used only to mint presigned URLs that the browser can actually fetch —
+	// signing against 127.0.0.1:9000 would produce URLs no one outside the box
+	// can resolve. Nil when PublicHost is unset; callers must handle that.
+	Presign    *minio.Client
+	PublicHost string
 }
 
-// New wires both SDK clients against the local MinIO instance.
-func New(endpoint, accessKey, secretKey, bucket string) (*Client, error) {
+// New wires both SDK clients against the local MinIO instance. publicHost is
+// the externally-reachable hostname (PUBLIC_HOST in .env). When non-empty an
+// extra HTTPS client is created for presigning; pass "" in tests or local dev
+// where presigning isn't needed.
+func New(endpoint, accessKey, secretKey, bucket, publicHost string) (*Client, error) {
 	if endpoint == "" {
 		endpoint = "127.0.0.1:9000"
 	}
@@ -44,7 +53,18 @@ func New(endpoint, accessKey, secretKey, bucket string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("madmin.New: %w", err)
 	}
-	return &Client{S3: s3, Admin: admin, Bucket: bucket, Endpoint: endpoint}, nil
+	c := &Client{S3: s3, Admin: admin, Bucket: bucket, Endpoint: endpoint, PublicHost: publicHost}
+	if publicHost != "" {
+		presign, err := minio.New(publicHost, &minio.Options{
+			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+			Secure: true,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("presign client: %w", err)
+		}
+		c.Presign = presign
+	}
+	return c, nil
 }
 
 // Healthy returns nil if the MinIO admin endpoint responds. Used by /healthz.
