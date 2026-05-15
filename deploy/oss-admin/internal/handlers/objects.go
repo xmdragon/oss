@@ -254,7 +254,7 @@ func (s *Server) PostBulkDelete(w http.ResponseWriter, r *http.Request) {
 		" requested=" + strconv.Itoa(result.Requested) +
 		" submitted=" + strconv.Itoa(result.Submitted) +
 		" removed=" + strconv.Itoa(result.Removed) +
-		" errors=" + strconv.Itoa(len(result.Errors))
+		" errors=" + strconv.Itoa(result.ErrorCount)
 	if scan.Truncated {
 		note += " truncated=true"
 	}
@@ -262,7 +262,7 @@ func (s *Server) PostBulkDelete(w http.ResponseWriter, r *http.Request) {
 		note += " partial=true"
 	}
 	resultLabel := "ok"
-	if len(result.Errors) > 0 || partial {
+	if result.ErrorCount > 0 || partial {
 		resultLabel = "error"
 	}
 	s.Audit.FromRequest(r, "object.bulk_delete", bucket+"/"+prefix, resultLabel, note)
@@ -274,11 +274,12 @@ func (s *Server) PostBulkDelete(w http.ResponseWriter, r *http.Request) {
 			" / "+strconv.Itoa(result.Requested)+" 个对象，剩余 "+
 			strconv.Itoa(result.Requested-result.Submitted)+
 			" 个因超时未提交（请重试清理），"+
-			strconv.Itoa(len(result.Errors))+" 个 MinIO 返回失败")
-	case len(result.Errors) > 0:
+			strconv.Itoa(result.ErrorCount)+" 个 MinIO 返回失败")
+	case result.ErrorCount > 0:
 		setFlash(w, "err", "已删除 "+strconv.Itoa(result.Removed)+
 			" / "+strconv.Itoa(result.Requested)+" 个对象，"+
-			strconv.Itoa(len(result.Errors))+" 个失败（详见 audit.log）")
+			strconv.Itoa(result.ErrorCount)+" 个失败（audit.log 含前 "+
+			strconv.Itoa(len(result.Errors))+" 条样本）")
 	default:
 		extra := ""
 		if scan.Truncated {

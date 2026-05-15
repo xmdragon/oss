@@ -194,16 +194,19 @@ func (c *Client) ScanByAge(ctx context.Context, bucket, prefix string, cutoff ti
 	return res, nil
 }
 
-// BulkRemoveResult reports outcomes from RemoveObjects. Errors is capped at
-// errorSampleLimit to keep audit/log lines bounded — full failure traces would
-// go in MinIO logs anyway. Submitted < Requested means the feeder hit
-// ctx cancellation before queuing every key — those unsubmitted keys remain in
-// the bucket and are not counted as either success or error.
+// BulkRemoveResult reports outcomes from RemoveObjects. ErrorCount is the
+// total number of failed deletions reported by MinIO; Errors is a *sample*
+// capped at errorSampleLimit so audit log lines stay bounded — callers needing
+// the true failure count must use ErrorCount, not len(Errors). Submitted <
+// Requested means the feeder hit ctx cancellation before queuing every key;
+// those unsubmitted keys remain in the bucket and are not counted as either
+// success or error.
 type BulkRemoveResult struct {
-	Requested int
-	Submitted int
-	Removed   int
-	Errors    []string
+	Requested  int
+	Submitted  int
+	Removed    int
+	ErrorCount int
+	Errors     []string
 }
 
 const errorSampleLimit = 20
@@ -235,18 +238,17 @@ func (c *Client) BulkRemove(ctx context.Context, bucket string, keys []string) *
 			}
 		}
 	}()
-	errCount := 0
 	for e := range c.S3.RemoveObjects(ctx, bucket, objCh, minio.RemoveObjectsOptions{}) {
 		if e.Err == nil {
 			continue
 		}
-		errCount++
+		result.ErrorCount++
 		if len(result.Errors) < errorSampleLimit {
 			result.Errors = append(result.Errors, e.ObjectName+": "+e.Err.Error())
 		}
 	}
 	result.Submitted = submitted
-	result.Removed = submitted - errCount
+	result.Removed = submitted - result.ErrorCount
 	if result.Removed < 0 {
 		// Defensive: shouldn't happen (minio-go shouldn't emit more errors
 		// than objects sent), but clamp so callers never see a negative.
