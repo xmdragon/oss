@@ -104,6 +104,12 @@ else
         log "  ↳ 补写 IMAGE_API_HOST（默认 ai.hjdtrading.com，KR 节点改 ai-kr.hjdtrading.com）"
         echo 'IMAGE_API_HOST=ai.hjdtrading.com' >> "$OSS_DIR/.env"
     fi
+    # 迁移：补 UPLOAD_HOST（桌面端直连源站 PUT 入口）。同 IMAGE_API_HOST 道理，
+    # 旧节点 .env 没这行的话 Caddy 展开成空导致 reload 失败。
+    if ! grep -q '^UPLOAD_HOST=' "$OSS_DIR/.env"; then
+        log "  ↳ 补写 UPLOAD_HOST（默认 oss-origin.hjdtrading.com，KR 节点改 oss-origin-kr.hjdtrading.com）"
+        echo 'UPLOAD_HOST=oss-origin.hjdtrading.com' >> "$OSS_DIR/.env"
+    fi
     # 迁移：旧版用 MinIO Console，需要 MINIO_BROWSER_REDIRECT_URL；
     # 现在改用 oss-admin，该变量不再需要，留着会导致 SSH 隧道访问
     # 官方 Console 时被错误重定向到 ossmanage（已被 oss-admin 接管）。

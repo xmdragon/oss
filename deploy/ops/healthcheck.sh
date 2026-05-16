@@ -35,22 +35,26 @@ else
 fi
 
 hr; echo "证书"; hr
-if [ -n "${PUBLIC_HOST:-}" ]; then
-    EXPIRE=$(echo | openssl s_client -servername "$PUBLIC_HOST" -connect "$PUBLIC_HOST:443" 2>/dev/null \
+check_cert() {
+    local host="$1"
+    local expire end_ts now_ts days
+    expire=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null \
         | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
-    if [ -n "$EXPIRE" ]; then
-        END_TS=$(date -d "$EXPIRE" +%s 2>/dev/null || echo 0)
-        NOW_TS=$(date +%s)
-        DAYS=$(( (END_TS - NOW_TS) / 86400 ))
-        if [ "$DAYS" -lt 15 ]; then
-            warn "证书剩余 $DAYS 天（<15）—— Caddy 应该会自动续，若未续查 journalctl -u caddy"
+    if [ -n "$expire" ]; then
+        end_ts=$(date -d "$expire" +%s 2>/dev/null || echo 0)
+        now_ts=$(date +%s)
+        days=$(( (end_ts - now_ts) / 86400 ))
+        if [ "$days" -lt 15 ]; then
+            warn "$host 证书剩余 $days 天（<15）—— Caddy 应该会自动续，若未续查 journalctl -u caddy"
         else
-            ok "证书到期 $EXPIRE（剩 $DAYS 天）"
+            ok "$host 证书到期 $expire（剩 $days 天）"
         fi
     else
-        err "无法读取 $PUBLIC_HOST 的证书"
+        err "无法读取 $host 的证书"
     fi
-fi
+}
+[ -n "${PUBLIC_HOST:-}" ] && check_cert "$PUBLIC_HOST"
+[ -n "${UPLOAD_HOST:-}" ] && check_cert "$UPLOAD_HOST"
 
 hr; echo "MinIO 内部探活"; hr
 if curl -sf -m 5 "http://127.0.0.1:9000/minio/health/live" -o /dev/null; then
@@ -60,14 +64,18 @@ else
 fi
 
 hr; echo "对外 HTTPS 探活（本机 → 公网 → 回）"; hr
-if [ -n "${PUBLIC_HOST:-}" ]; then
-    CODE=$(curl -so /dev/null -w "%{http_code}" -m 10 "https://${PUBLIC_HOST}/minio/health/live" || echo ERR)
-    if [ "$CODE" = "200" ]; then
-        ok "https://${PUBLIC_HOST}/minio/health/live 200"
+check_health() {
+    local host="$1"
+    local code
+    code=$(curl -so /dev/null -w "%{http_code}" -m 10 "https://${host}/minio/health/live" || echo ERR)
+    if [ "$code" = "200" ]; then
+        ok "https://${host}/minio/health/live 200"
     else
-        err "返回 $CODE（可能 DNS / 证书 / Caddy / MinIO 之一有问题）"
+        err "https://${host}/minio/health/live 返回 $code（可能 DNS / 证书 / Caddy / MinIO 之一有问题）"
     fi
-fi
+}
+[ -n "${PUBLIC_HOST:-}" ] && check_health "$PUBLIC_HOST"
+[ -n "${UPLOAD_HOST:-}" ] && check_health "$UPLOAD_HOST"
 
 hr; echo "Bucket 概览"; hr
 if [ -n "${MINIO_ROOT_USER:-}" ] && [ -n "${MINIO_ROOT_PASSWORD:-}" ]; then

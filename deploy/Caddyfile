@@ -1,6 +1,6 @@
 # Ozon 图片暂存 —— Caddy 反代配置
 # 部署时由 install.sh 复制到 /etc/caddy/Caddyfile
-# {$PUBLIC_HOST} / {$ADMIN_HOST} / {$IMAGE_API_HOST} / {$ACME_EMAIL}
+# {$PUBLIC_HOST} / {$UPLOAD_HOST} / {$ADMIN_HOST} / {$IMAGE_API_HOST} / {$ACME_EMAIL}
 # 都来自 systemd drop-in 的 /opt/oss/.env，让同一份 Caddyfile 跨多区域复用
 # （oss / oss-kr 等不同节点用各自的 .env 区分对外域名）
 
@@ -65,6 +65,55 @@
 
     log {
         output file /var/log/caddy/access.log {
+            roll_size 100mb
+            roll_keep 4
+            roll_keep_for 720h
+        }
+        format json
+    }
+}
+
+# ─── 桌面端 PUT 上传专用入口（独立子域名，CF 灰云直连）────────
+# 访问：https://{$UPLOAD_HOST}（生产例：oss-origin.hjdtrading.com）
+# 与 {$PUBLIC_HOST} 反代到同一份 MinIO 数据；客户端 PUT 走这里直连源站，
+# 避开 CF 橙云回俄罗斯 IDC 的不稳。Ozon 拉图仍用 {$PUBLIC_HOST}。
+# 桌面端发新版本时填进 ImageMatchConfig.stage_upload_endpoint；
+# 老桌面无此字段不感知，PUT 继续走 {$PUBLIC_HOST}。
+{$UPLOAD_HOST} {
+    # 显式 LE（同 ADMIN_HOST 风格），灰云直连必须公共 CA 证书
+    tls {$ACME_EMAIL}
+
+    encode zstd gzip
+
+    # 与 PUBLIC_HOST 一致：图片 / 短视频 100MB 上限
+    request_body {
+        max_size 100MB
+    }
+
+    # MinIO S3 API 反代（同一 MinIO 实例 127.0.0.1:9000）
+    reverse_proxy 127.0.0.1:9000 {
+        transport http {
+            read_timeout 5m
+            write_timeout 5m
+        }
+        # S3 V4 签名包含 Host header；客户端用 {$UPLOAD_HOST} 签名时
+        # 必须把这个 host 透传给 MinIO，不能改成 PUBLIC_HOST
+        header_up Host {host}
+        # 灰云直连，{client_ip} 等同 remote_host
+        header_up X-Real-IP {client_ip}
+        header_up X-Forwarded-For {client_ip}
+    }
+
+    header {
+        Access-Control-Allow-Origin "*"
+        Access-Control-Allow-Methods "GET, HEAD, PUT"
+        Access-Control-Allow-Headers "Authorization, Content-Type, Content-MD5, x-amz-*"
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/upload-access.log {
             roll_size 100mb
             roll_keep 4
             roll_keep_for 720h
