@@ -90,6 +90,15 @@
         max_size 100MB
     }
 
+    # 与 PUBLIC_HOST 一致：ai-image inputs prefix 收紧到 5MB。
+    # 当前桌面端 AI 改图 inputs 仍走 PUBLIC_HOST 的 presigned URL；
+    # 但若以后 image-api 改成下发 UPLOAD_HOST 的 presigned URL，
+    # 此限制就必须先就位以防 oversized 输入绕过 Caddy 端 guard。
+    @inputs path /ai-image/inputs/*
+    request_body @inputs {
+        max_size 5MB
+    }
+
     # MinIO S3 API 反代（同一 MinIO 实例 127.0.0.1:9000）
     reverse_proxy 127.0.0.1:9000 {
         transport http {

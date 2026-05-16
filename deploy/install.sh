@@ -106,9 +106,18 @@ else
     fi
     # 迁移：补 UPLOAD_HOST（桌面端直连源站 PUT 入口）。同 IMAGE_API_HOST 道理，
     # 旧节点 .env 没这行的话 Caddy 展开成空导致 reload 失败。
+    # 默认值从现有 PUBLIC_HOST 推导：oss[-region].hjdtrading.com →
+    # oss-origin[-region].hjdtrading.com，避免 KR 节点错填 oss-origin（主区域）。
     if ! grep -q '^UPLOAD_HOST=' "$OSS_DIR/.env"; then
-        log "  ↳ 补写 UPLOAD_HOST（默认 oss-origin.hjdtrading.com，KR 节点改 oss-origin-kr.hjdtrading.com）"
-        echo 'UPLOAD_HOST=oss-origin.hjdtrading.com' >> "$OSS_DIR/.env"
+        PUB=$(grep '^PUBLIC_HOST=' "$OSS_DIR/.env" | head -1 | cut -d= -f2- | tr -d '"' | xargs)
+        if [ -n "$PUB" ]; then
+            DERIVED=$(echo "$PUB" | sed -E 's/^oss(([-.])(.+))/oss-origin\1/')
+            log "  ↳ 补写 UPLOAD_HOST（由 PUBLIC_HOST=$PUB 推导出 $DERIVED）"
+            echo "UPLOAD_HOST=$DERIVED" >> "$OSS_DIR/.env"
+        else
+            log "  ↳ 补写 UPLOAD_HOST（PUBLIC_HOST 未设，默认 oss-origin.hjdtrading.com，按需修改）"
+            echo 'UPLOAD_HOST=oss-origin.hjdtrading.com' >> "$OSS_DIR/.env"
+        fi
     fi
     # 迁移：旧版用 MinIO Console，需要 MINIO_BROWSER_REDIRECT_URL；
     # 现在改用 oss-admin，该变量不再需要，留着会导致 SSH 隧道访问
